@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.turbo/
+
+# Playwright artifacts
+automation/playwright/reports/
+automation/playwright/test-results/
+playwright-report/
+test-results/
+blob-report/
+
+# Environment secrets (never commit real credentials)
+.env.secrets
+*.env.secrets
+.env.*.local
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*

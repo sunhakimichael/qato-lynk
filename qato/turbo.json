@@ -1,0 +1,22 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^typecheck"],
+      "outputs": []
+    },
+    "test:e2e": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["reports/**"],
+      "cache": false
+    },
+    "test:e2e:ui": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
