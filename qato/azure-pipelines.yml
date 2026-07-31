@@ -1,0 +1,85 @@
+# Secondary CI provider. Mirrors .github/workflows/ci.yml stage-for-stage —
+# same 3 stages, same shared ci/scripts/*.sh. Every framework-specific
+# decision lives in those scripts, not here; this file only knows how to
+# invoke bash.
+#
+# NOTE: Azure's NodeTool@0 task doesn't support reading a version from
+# .nvmrc the way GitHub's actions/setup-node does — versionSpec below is
+# hardcoded and must be kept in sync with .nvmrc by hand.
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: TypecheckAndUnitTests
+    jobs:
+      - job: TypecheckAndUnitTests
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "22.x" # keep in sync with .nvmrc
+            displayName: Use Node.js 22.x
+          - script: corepack enable
+            displayName: Enable corepack (pnpm)
+          - script: bash ci/scripts/install.sh
+            displayName: Install dependencies
+          - script: bash ci/scripts/typecheck.sh
+            displayName: Typecheck
+          - script: bash ci/scripts/unit-test.sh
+            displayName: Unit tests
+
+  - stage: SmokeE2E
+    dependsOn: TypecheckAndUnitTests
+    jobs:
+      - job: SmokeE2E
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "22.x"
+            displayName: Use Node.js 22.x
+          - script: corepack enable
+            displayName: Enable corepack (pnpm)
+          - script: bash ci/scripts/install.sh
+            displayName: Install dependencies
+          - script: bash ci/scripts/smoke-test.sh
+            displayName: Run smoke suite
+            env:
+              APP_ENV: staging
+              # Secret pipeline variables are NOT auto-injected as env vars
+              # from job-level `variables:` — they must be explicitly mapped
+              # here. Define these as secret variables in the pipeline's
+              # Variables UI (or a variable group) before running this.
+              CMS_USERNAME: $(CMS_USERNAME)
+              CMS_PASSWORD: $(CMS_PASSWORD)
+              MEMBER_EMAIL: $(MEMBER_EMAIL)
+          - task: PublishBuildArtifacts@1
+            condition: always()
+            inputs:
+              PathtoPublish: automation/playwright/reports
+              ArtifactName: playwright-report
+
+  - stage: BuildDashboard
+    dependsOn: TypecheckAndUnitTests
+    jobs:
+      - job: BuildDashboard
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "22.x"
+            displayName: Use Node.js 22.x
+          - script: corepack enable
+            displayName: Enable corepack (pnpm)
+          - script: bash ci/scripts/install.sh
+            displayName: Install dependencies
+          - script: bash ci/scripts/build-dashboard.sh
+            displayName: Build QA dashboard

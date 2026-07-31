@@ -31,6 +31,14 @@ describe("Route Registry", () => {
     expect(cmsRoutes.login()).toBe("https://cms.fixture.test/login");
   });
 
+  it("composes an absolute CMS my-lynks home URL", () => {
+    expect(cmsRoutes.myLynksHome()).toBe("https://cms.fixture.test/admin/my-lynks/home");
+  });
+
+  it("composes an absolute CMS orders home URL", () => {
+    expect(cmsRoutes.ordersHome()).toBe("https://cms.fixture.test/admin/orders/home");
+  });
+
   it("composes an absolute public storefront URL using the creator slug", () => {
     expect(publicRoutes.storefront()).toBe("https://public.fixture.test/fixture-creator");
   });

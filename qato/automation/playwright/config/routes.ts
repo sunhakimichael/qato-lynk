@@ -16,6 +16,10 @@ import { getBaseUrl, getCreatorSlug } from "./environments";
 export const cmsRoutes = {
   /** CMS login screen. Username/email + password. */
   login: (): string => `${getBaseUrl("cms")}/login`,
+  /** Post-login landing page. */
+  myLynksHome: (): string => `${getBaseUrl("cms")}/admin/my-lynks/home`,
+  /** Product Orders list. */
+  ordersHome: (): string => `${getBaseUrl("cms")}/admin/orders/home`,
 };
 
 export const publicRoutes = {

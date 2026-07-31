@@ -1,6 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
+    "build": {
+      "dependsOn": ["^typecheck"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "outputs": []
@@ -10,6 +14,11 @@
       "outputs": []
     },
     "test:e2e": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["reports/**"],
+      "cache": false
+    },
+    "test:smoke": {
       "dependsOn": ["^typecheck"],
       "outputs": ["reports/**"],
       "cache": false

@@ -20,7 +20,7 @@ export default defineConfig({
   retries: env.APP_ENV === "local" ? 0 : 2,
 
   reporter: [
-    ["list"],
+    [process.env.CI ? "dot" : "list"],
     ["html", { outputFolder: "reports/html", open: "never" }],
     ["junit", { outputFile: "reports/junit/results.xml" }],
   ],
@@ -36,14 +36,17 @@ export default defineConfig({
   projects: [
     {
       name: "cms",
+      testDir: "./tests/cms",
       use: { baseURL: getBaseUrl("cms") },
     },
     {
       name: "public",
+      testDir: "./tests/public",
       use: { baseURL: getBaseUrl("public") },
     },
     {
       name: "member",
+      testDir: "./tests/member",
       use: { baseURL: getBaseUrl("member") },
     },
   ],
