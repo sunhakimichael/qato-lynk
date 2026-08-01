@@ -36,6 +36,13 @@ Playwright suite produces, no backend/DB. See "QA Dashboard (Milestone 8)" below
 adapters over a shared `ci/scripts/` layer. See `ci/README.md` for the full design, required
 secrets, and what's honestly not built yet (no `@regression` suite, no deployment step).
 
+**Milestone 10 complete:** Virtual Account payment completion (dev/staging only) via Duitku
+Sandbox. Payment provider isolated behind `VirtualAccountPaymentProvider` — see
+"Payment Completion (Milestone 10)" below for two real gaps flagged rather than invented around.
+
+**Milestone 11 complete:** Regression suite. `@smoke` is now a subset of `@regression`, not a
+separate invented suite — see "Regression Suite (Milestone 11)" below for why.
+
 ## Requirements
 
 - Node 22.x (see `.nvmrc`)
@@ -96,6 +103,64 @@ nothing is hardcoded in test or journey code. Product fixture fields (`TEST_PROD
 validated by their own schema (`factories/testData.schema.ts`), separate from `shared`'s
 connectivity schema, since fixture data is automation-specific and has no reason to be a
 dependency of the future dashboard app.
+
+## Regression Suite (Milestone 11)
+
+```
+pnpm test:regression   # playwright test --grep @regression
+```
+
+**Design decision: `@smoke` is a subset of `@regression`, not a separate suite.** The instruction
+was to build this "using the completed Page Objects and end-to-end flows" — not to invent new
+test scenarios with no codegen evidence behind them. So rather than fabricate additional coverage,
+all 3 existing `@smoke` tests were re-tagged `["@smoke", "@regression"]`, and the 2 tests that
+were already built but couldn't be `@smoke` (OTP-dependent download, Virtual Account purchase) got
+`@regression` added. Result: 5 tests total under `@regression`, 3 of which are also `@smoke`.
+
+**This is safe to run unattended, and now does.** `nightly.yml` and `release.yml` (Milestone 9)
+were upgraded from re-running `@smoke` to running `@regression` — this works because
+`test.skip()` doesn't fail a build. Without `OTP_CODE`/`TRANSFER_AMOUNT`, those 2 tests skip
+cleanly and the other 3 still execute. `ci.yml` (the fast per-push check) intentionally still
+runs only `@smoke` — regression's job is thoroughness, not speed.
+
+## Payment Completion (Milestone 10)
+
+```
+pages/payment-providers/
+├── VirtualAccountPaymentProvider.ts   # interface — journeys depend on this, not Duitku directly
+└── duitku/DuitkuSandboxPage.ts        # implements it
+journeys/purchase/completeVirtualAccountPurchase.journey.ts
+```
+
+**Isolation, as requested:** the Purchase Journey depends on `VirtualAccountPaymentProvider`
+(one method: `completeVirtualAccountPayment(vaNumber, transferAmount)`), not on `DuitkuSandboxPage`
+concretely. Replacing Duitku later means writing a new class implementing that same interface —
+zero changes to `journeys/purchase/` or anything upstream of it.
+
+**Two real gaps, handled two different ways:**
+
+1. **VA number** — no locator was ever captured for the raw number text, only the "Copy" button
+   click. Rather than guess a text selector, `PublicPaymentStatusPage.copyVirtualAccountNumber()`
+   clicks the real recorded button and reads the clipboard afterward (`navigator.clipboard.readText()`,
+   after granting `clipboard-read`/`clipboard-write` on the browser context). This is a genuine
+   solve, not a workaround — Chromium-only, which matches this framework's default browser.
+2. **Transfer amount** — genuinely unrecoverable from the codegen: no locator exists for the
+   actual Payment Amount value, and it isn't just the product price (88,000 IDR charged for an
+   85,000 IDR product implies an unknown gateway fee). This stays a required, human-supplied
+   parameter — same pattern as `OTP_CODE`, now via `TRANSFER_AMOUNT`.
+
+**Other flagged assumptions:**
+- **Buyer email defaults to `getTestMember().email`**, not the throwaway address in the recorded
+  session. Deliberate: for "continue with Library and Download verification" to actually work,
+  the purchase has to belong to the same account that later checks the library.
+- **Same-tab Duitku navigation assumed, not confirmed.** The 3 codegen sessions were separate
+  `test()` blocks, so whether the real app opens the payment provider in a new tab couldn't be
+  determined. If it does, `DuitkuSandboxPage` needs `context.waitForEvent('page')` handling.
+- **Dev/staging only**, per instruction — enforced in the test file, not the journey (env-specific
+  rules stay out of reusable journey functions, consistent with every other milestone).
+
+`tests/public/virtual-account-purchase.spec.ts` requires `TRANSFER_AMOUNT` and skips outside
+local/development/staging — not tagged `@smoke` for the same reason as the OTP test.
 
 ## QA Dashboard (Milestone 8)
 

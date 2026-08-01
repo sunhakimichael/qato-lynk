@@ -31,4 +31,40 @@ export class PublicPaymentStatusPage {
   get checkTransactionButton(): Locator {
     return publicPaymentStatusLocators.checkTransactionButton(this.page);
   }
+
+  async clickCheckTransaction(): Promise<void> {
+    await publicPaymentStatusLocators.checkTransactionButton(this.page).click();
+  }
+
+  get productsLabelText(): Locator {
+    return publicPaymentStatusLocators.productsLabelText(this.page);
+  }
+
+  get paymentAmountLabelText(): Locator {
+    return publicPaymentStatusLocators.paymentAmountLabelText(this.page);
+  }
+
+  /** `methodName` e.g. "CIMB Niaga Virtual Account" — see locator comment for why this is parameterized. */
+  paymentMethodParagraph(methodName: string): Locator {
+    return publicPaymentStatusLocators.paymentMethodParagraph(this.page, methodName);
+  }
+
+  /**
+   * Retrieves the generated Virtual Account number via the page's own
+   * "Copy" button + a clipboard read, rather than a text locator — none
+   * was captured in codegen (only the button click was recorded). Grants
+   * clipboard-read/write permissions on the browser context immediately
+   * before use, since the page's own Copy button implementation likely
+   * needs clipboard-write to function, and reading the result needs
+   * clipboard-read.
+   *
+   * Reliable in Chromium only, which matches this framework's default
+   * (no browserName is set anywhere in this project, so Chromium is used
+   * throughout — see playwright.config.ts).
+   */
+  async copyVirtualAccountNumber(): Promise<string> {
+    await this.page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await publicPaymentStatusLocators.copyVaNumberButton(this.page).click();
+    return this.page.evaluate(() => navigator.clipboard.readText());
+  }
 }

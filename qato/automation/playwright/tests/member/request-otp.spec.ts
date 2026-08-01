@@ -4,7 +4,7 @@ import { expectOtpChallengePresented } from "../../assertions";
 
 test(
   "member can request an OTP after submitting their email",
-  { tag: "@smoke" },
+  { tag: ["@smoke", "@regression"] },
   async ({ page }) => {
     const otpModal = await requestMemberOtp(page);
     await expectOtpChallengePresented(otpModal);

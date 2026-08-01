@@ -54,17 +54,28 @@ rather than implied to be covered.
 A creator logs into the CMS and confirms their Product Orders list loads. This is the simplest
 flow — the "is the CMS even up" check.
 
-### 2. Guest checkout (the purchase flow)
+### 2. Guest checkout and payment (the purchase flow)
 
 ```mermaid
 graph LR
     A[Storefront] --> B[Product Detail]
     B --> C[Checkout]
-    C --> D[Payment Confirmed]
+    C --> D["Virtual Account<br/>generated"]
+    D --> E["Pay via bank<br/>(sandbox)"]
+    E --> F["Payment confirmed<br/>in MyLink"]
+    F --> G[Thank You page]
 ```
 
 A customer browses the storefront, picks a product, checks out as a guest (email only, no
-account), and the test confirms a payment confirmation screen appears with an invoice number.
+account), and pays using a **Virtual Account** — a common Indonesian payment method where the
+bank generates a unique account number to transfer money into. In development and staging, this
+payment is completed automatically through Duitku's **sandbox** (a safe, fake-money testing
+environment payment providers offer so nobody has to use real money to test a real payment flow).
+The test confirms the payment shows as complete back on the site, and that a "Thank You" page
+appears.
+
+This only runs in development and staging — not production, where a live payment can't safely be
+simulated the same way.
 
 ### 3. Member login, library, and download
 
@@ -194,6 +205,10 @@ By default this runs against the `local` environment. To run against a different
 APP_ENV=staging pnpm test:smoke
 ```
 
+There's also a broader **regression suite** (`pnpm test:regression`) that includes everything in
+smoke plus a few more thorough checks — some of which need extra manual input (like the OTP code
+mentioned above) and will skip themselves cleanly if you don't provide it, rather than fail.
+
 ### 5. Look at the results
 
 Once tests finish, two things are generated automatically:
@@ -287,8 +302,8 @@ underlying scripts, so switching between them (or adding another provider later)
 rewriting how tests actually work. If you're setting this up for a team, see
 [`ci/README.md`](ci/README.md) for what secrets/credentials need to be configured first.
 
-There's also a nightly scheduled run and a manual "release gate" check — details in
-[`ci/README.md`](ci/README.md).
+There's also a nightly scheduled run (using the broader regression suite) and a manual "release
+gate" check — details in [`ci/README.md`](ci/README.md).
 
 ---
 
@@ -300,13 +315,16 @@ covered.
 - **The Member Area download test can't run unattended.** It needs a real, fresh 6-digit code from
   an actual inbox every time. There's no automated way to fetch that code yet, so this test always
   needs a human to supply it.
+- **The Virtual Account payment test also can't run fully unattended.** The exact amount to pay
+  (which includes a payment-gateway fee on top of the product price) has to be read off the
+  checkout page and supplied by hand — there's no way to extract it automatically yet.
 - **The Dashboard shows only the latest run, not history.** There's no database yet — it reads the
   most recent report file directly. Trends over time aren't available.
 - **Only three environments are fully covered:** local, development, and staging use the same test
   product; production uses a different one, and one specific product-display format hasn't been
   verified there yet (a checkout test will skip itself in production rather than guess).
-- **Only guest checkout, creator login, and member login/download are automated.** Everything else
-  in the CMS, storefront, or member area isn't tested yet.
+- **Only guest checkout + payment, creator login, and member login/download are automated.**
+  Everything else in the CMS, storefront, or member area isn't tested yet.
 
 For the full technical reasoning behind each of these (and everything else), see
 [`docs/ENGINEERING.md`](docs/ENGINEERING.md).

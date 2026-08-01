@@ -21,7 +21,7 @@ const KNOWN_PRODUCT_LINK_LABELS: Partial<Record<AppEnv, string>> = {
 
 test(
   "guest can complete checkout and reach a confirmed payment status",
-  { tag: "@smoke" },
+  { tag: ["@smoke", "@regression"] },
   async ({ page }) => {
     const { APP_ENV } = loadEnvConfig();
     const productLinkLabel = KNOWN_PRODUCT_LINK_LABELS[APP_ENV];
