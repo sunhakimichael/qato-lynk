@@ -17,7 +17,17 @@ export const publicPaymentStatusLocators = {
     page.getByRole("paragraph").filter({ hasText: methodName }),
 
   /**
-   * The "Copy" button next to the generated VA number. There is no
+   * Container holding the full invoice/payment details block (Products,
+   * Inv. Number, Payment Amount, method) as one section — confirmed to
+   * contain the Payment Amount value as period-separated digits (e.g.
+   * "88.000"), though no narrower locator exists for that value alone.
+   * See PaymentHelper.getPaymentAmount() for how the value is extracted
+   * from this section's combined text.
+   */
+  invoiceSection: (page: Page) => page.locator("#invoiceSection"),
+
+  /**
+   * The Copy button next to the generated VA number. There is no
    * captured locator for the VA number's own text — codegen only recorded
    * clicking this button, not which element holds the raw number.
    * Retrieval goes through clipboard-read after this click; see

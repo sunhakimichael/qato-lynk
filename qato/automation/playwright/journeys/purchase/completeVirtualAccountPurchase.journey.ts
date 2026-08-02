@@ -6,6 +6,7 @@ import { PublicPaymentStatusPage } from "../../pages/public/PublicPaymentStatusP
 import { ThankYouPage } from "../../pages/public/ThankYouPage";
 import { DuitkuSandboxPage } from "../../pages/payment-providers/duitku/DuitkuSandboxPage";
 import type { VirtualAccountPaymentProvider } from "../../pages/payment-providers/VirtualAccountPaymentProvider";
+import { PaymentHelper } from "../../helpers/PaymentHelper";
 import { getTestMember } from "../../factories";
 
 export interface VirtualAccountPurchaseOptions {
@@ -26,15 +27,6 @@ export interface VirtualAccountPurchaseOptions {
   paymentMethodPosition?: number;
   /** Exact channel label in Duitku's sandbox dropdown, e.g. "CIMB NIAGA VA". Passed through to the payment provider. */
   channelLabel?: string;
-  /**
-   * The amount to transfer in the sandbox. REQUIRED — cannot be derived
-   * automatically. No locator was ever captured for the actual Payment
-   * Amount value (only its label), and the amount charged is not simply
-   * the product price: this session paid 88,000 IDR for an 85,000 IDR
-   * product, implying a gateway fee whose exact calculation is unknown.
-   * Caller must supply the real amount shown on the payment page.
-   */
-  transferAmount: string;
   /** Defaults to a new DuitkuSandboxPage — override to use a different provider without touching this journey. */
   paymentProvider?: VirtualAccountPaymentProvider;
 }
@@ -45,9 +37,20 @@ export interface VirtualAccountPurchaseResult {
 }
 
 /**
- * Full Virtual Account purchase flow: Storefront -> Product Detail ->
- * Checkout -> VA payment details -> Duitku Sandbox payment -> back to
- * MyLink -> payment status verified -> Thank You page.
+ * Full Virtual Account purchase flow:
+ *
+ *   Storefront -> Product Detail -> Checkout -> Generate VA
+ *   -> Read VA Number -> Read Amount (from MyLink, source of truth)
+ *   -> Open Duitku Sandbox -> Input VA -> Input Amount -> Pay
+ *   -> Verify Success -> back to MyLink -> payment status verified
+ *   -> Thank You page
+ *
+ * The payment amount is always read from MyLink — never from test data
+ * or hardcoded config — via PaymentHelper.getPaymentAmount(), so this
+ * keeps working if product prices, discounts, taxes, or promotions
+ * change. DuitkuSandboxPage independently verifies the amount it actually
+ * entered matches what it was given, throwing PaymentMismatchError on any
+ * discrepancy (see that class for details).
  *
  * Does NOT chain into Library/Download itself (see journeys/member/) —
  * those still require a separately-supplied OTP code, so combining them
@@ -64,7 +67,6 @@ export async function completeVirtualAccountPurchase(
     buyerEmail,
     paymentMethodPosition = 6,
     channelLabel = "CIMB NIAGA VA",
-    transferAmount,
   } = options;
 
   const storefront = new PublicStorefrontPage(page);
@@ -86,13 +88,14 @@ export async function completeVirtualAccountPurchase(
   const paymentStatusPage = new PublicPaymentStatusPage(page);
   await paymentStatusPage.waitForLoad();
 
-  // Retrieved via clipboard-read after the recorded "Copy" button click —
-  // see PublicPaymentStatusPage.copyVirtualAccountNumber() for why.
-  const vaNumber = await paymentStatusPage.copyVirtualAccountNumber();
-
   const provider: VirtualAccountPaymentProvider =
     options.paymentProvider ?? new DuitkuSandboxPage(page, channelLabel);
-  await provider.completeVirtualAccountPayment(vaNumber, transferAmount);
+  const paymentHelper = new PaymentHelper(paymentStatusPage, provider);
+
+  const vaNumber = await paymentHelper.getVirtualAccountNumber();
+  const paymentAmount = await paymentHelper.getPaymentAmount();
+
+  await paymentHelper.payViaDuitkuSandbox(vaNumber, paymentAmount);
 
   await paymentStatusPage.clickCheckTransaction();
 

@@ -8,6 +8,56 @@ how to read a test report — see [`../README.md`](../README.md).
 ---
 
 
+## Architectural Decisions
+
+Most decisions in this project are documented inline where they're made (see each milestone
+section below). This one gets a formal record because it's explicitly revisitable, has real
+operational consequences, and future contributors need to know it was a deliberate choice, not an
+oversight — future high-stakes/revisitable calls should follow this same format.
+
+### ADR-001: Virtual Account payment flow stays in `@regression`, not `@smoke`
+
+**Status:** Accepted — 2026-08-03
+
+**Context**
+
+As of the `PaymentHelper.getPaymentAmount()` fix, `completeVirtualAccountPurchase` (Milestone 10)
+is technically capable of running fully unattended — no human input is required anymore. This
+raises the question of whether it should be promoted to `@smoke` (runs on every push/PR) or stay
+in `@regression` (runs nightly + on manual release gate).
+
+**Decision**
+
+Keep it in `@regression` only. Do not promote to `@smoke`.
+
+**Rationale**
+
+- Every execution creates a **real transaction** in Duitku's sandbox and a **real order record**
+  in the development/staging application. This is a side effect, not a read-only check.
+- `@smoke` runs on every push — potentially many times a day across an active team, with no
+  natural ceiling on how much test data that generates.
+- `@regression` runs nightly (bounded to roughly once a day) plus occasional manual release
+  checks — a predictable, quantifiable rate instead of an uncontrolled one.
+- No test data lifecycle or cleanup policy exists anywhere in this project yet (no teardown, no
+  expiry, no separation of test-created orders from real data). Accumulating that data slowly
+  while a proper policy gets defined is preferable to accumulating it quickly.
+
+**Consequences**
+
+- Feedback on VA-payment regressions arrives nightly or at release time, not immediately on push.
+- Dev/staging will still accumulate some test data over time, just at a controlled, predictable
+  rate rather than an uncontrolled per-push rate.
+
+**Revisit this decision once all three of the following are true:**
+
+1. A documented test data lifecycle and cleanup policy exists.
+2. A clear, agreed execution schedule for the regression suite is defined.
+3. There's confidence the operational impact (sandbox load, order volume, any downstream
+   reporting/analytics pollution) is acceptable.
+
+See `README.md`'s "Test suite strategy" section for the plain-language version of this same
+reasoning, aimed at a non-engineering audience.
+
 ## Status
 
 **Milestone 1 complete:** repository foundation, Turborepo/pnpm workspace, environment config layer, Playwright skeleton.
@@ -119,9 +169,11 @@ were already built but couldn't be `@smoke` (OTP-dependent download, Virtual Acc
 
 **This is safe to run unattended, and now does.** `nightly.yml` and `release.yml` (Milestone 9)
 were upgraded from re-running `@smoke` to running `@regression` — this works because
-`test.skip()` doesn't fail a build. Without `OTP_CODE`/`TRANSFER_AMOUNT`, those 2 tests skip
-cleanly and the other 3 still execute. `ci.yml` (the fast per-push check) intentionally still
-runs only `@smoke` — regression's job is thoroughness, not speed.
+`test.skip()` doesn't fail a build. Without `OTP_CODE`, the download test skips cleanly; the other
+4 tests execute (the VA purchase test no longer needs manual input at all, see Payment Completion
+below — it stays `@regression` for a different reason now, see **ADR-001**). `ci.yml` (the fast
+per-push check) intentionally still runs only `@smoke` — regression's job is thoroughness, not
+speed.
 
 ## Payment Completion (Milestone 10)
 
@@ -137,17 +189,40 @@ journeys/purchase/completeVirtualAccountPurchase.journey.ts
 concretely. Replacing Duitku later means writing a new class implementing that same interface —
 zero changes to `journeys/purchase/` or anything upstream of it.
 
-**Two real gaps, handled two different ways:**
+**Two real gaps — one now fully resolved, one still open:**
 
-1. **VA number** — no locator was ever captured for the raw number text, only the "Copy" button
-   click. Rather than guess a text selector, `PublicPaymentStatusPage.copyVirtualAccountNumber()`
-   clicks the real recorded button and reads the clipboard afterward (`navigator.clipboard.readText()`,
-   after granting `clipboard-read`/`clipboard-write` on the browser context). This is a genuine
-   solve, not a workaround — Chromium-only, which matches this framework's default browser.
-2. **Transfer amount** — genuinely unrecoverable from the codegen: no locator exists for the
-   actual Payment Amount value, and it isn't just the product price (88,000 IDR charged for an
-   85,000 IDR product implies an unknown gateway fee). This stays a required, human-supplied
-   parameter — same pattern as `OTP_CODE`, now via `TRANSFER_AMOUNT`.
+1. **VA number** — resolved in Milestone 10. `PublicPaymentStatusPage.copyVirtualAccountNumber()`
+   clicks the real recorded "Copy" button and reads the clipboard afterward
+   (`navigator.clipboard.readText()`, after granting `clipboard-read`/`clipboard-write` on the
+   browser context). Chromium-only, which matches this framework's default browser.
+2. **Payment amount** — resolved after Milestone 10 shipped, once `#invoiceSection` was confirmed
+   to contain the value. `PaymentHelper.getPaymentAmount()` reads that section's full text and
+   extracts the number following the "Payment Amount" label via
+   `PaymentHelper.extractPaymentAmountFromText()` — a pure, unit-tested function (4 tests: normal
+   case, comma separator, same-line label+value, and the throw-with-raw-text failure mode). This
+   combines two independently confirmed facts (the label's existence, and the section's contents)
+   rather than guessing a DOM structure — there was no equivalent of the VA number's "Copy" button
+   to fall back on here, so this was the more defensible middle ground. `transferAmount` was
+   removed entirely from the journey's parameters as a result — MyLink is now the *only* source for
+   this value, not an overridable convention.
+
+**`helpers/PaymentHelper.ts`** — first real use of the `helpers/` folder from the original project
+structure. Consolidates VA-payment mechanics (`getVirtualAccountNumber`, `getPaymentAmount`,
+`normalizeCurrency`, `payViaDuitkuSandbox`) separately from journey orchestration.
+`normalizeCurrency` and `extractPaymentAmountFromText` are both pure and fully unit tested (10
+tests total) — `normalizeCurrency` strips `IDR`/`Rp` prefixes and the inconsistent comma/period
+thousand-separator formatting seen in Indonesian currency display.
+
+**Amount validation is real on both ends now.** `DuitkuSandboxPage.completeVirtualAccountPayment()`
+reads `#TextBoxAnount` back via `.inputValue()` immediately after filling it and throws
+`PaymentMismatchError` (a shared, provider-agnostic error type in `pages/payment-providers/`) if
+it doesn't match exactly — catching a silent fill failure or provider-side input masking rather
+than assuming the write succeeded.
+
+**Suite placement is a formal decision, not an implementation detail.** This flow is tagged
+`@regression`, not `@smoke`, because of its operational impact (real sandbox transactions, real
+orders, no cleanup policy yet) — see **ADR-001** at the top of this document for the full
+rationale and the conditions under which this gets revisited.
 
 **Other flagged assumptions:**
 - **Buyer email defaults to `getTestMember().email`**, not the throwaway address in the recorded

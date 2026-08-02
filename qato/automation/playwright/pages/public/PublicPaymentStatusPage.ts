@@ -49,6 +49,20 @@ export class PublicPaymentStatusPage {
     return publicPaymentStatusLocators.paymentMethodParagraph(this.page, methodName);
   }
 
+  get invoiceSection(): Locator {
+    return publicPaymentStatusLocators.invoiceSection(this.page);
+  }
+
+  /**
+   * Raw text of the invoice section. Contains Products, Inv. Number,
+   * Payment Amount, and payment method together as one block — no
+   * narrower locator exists for the amount value alone. See
+   * PaymentHelper.getPaymentAmount() for how the amount is parsed out.
+   */
+  async getInvoiceSectionText(): Promise<string> {
+    return publicPaymentStatusLocators.invoiceSection(this.page).innerText();
+  }
+
   /**
    * Retrieves the generated Virtual Account number via the page's own
    * "Copy" button + a clipboard read, rather than a text locator — none

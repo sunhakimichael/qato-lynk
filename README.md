@@ -14,10 +14,10 @@ Page Objects, and CI pipelines, you probably want the technical reference instea
 | If you are a... | Start with |
 |---|---|
 | QA Manual tester / UAT team member | [What Qato does](#what-qato-does), [Reading a test report](#reading-a-test-report) |
-| Junior QA / QA Automation Engineer | [Getting started](#getting-started), [What's actually tested today](#whats-actually-tested-today) |
+| Junior QA / QA Automation Engineer | [Getting started](#getting-started), [What's actually tested today](#whats-actually-tested-today), [Test suite strategy](#test-suite-strategy-smoke-vs-regression) |
 | Developer | [Getting started](#getting-started), then [`docs/ENGINEERING.md`](docs/ENGINEERING.md) |
-| Business Analyst / Product Manager | [What Qato does](#what-qato-does), [What's actually tested today](#whats-actually-tested-today) |
-| DevOps Engineer | [How tests run automatically](#how-tests-run-automatically-cicd), then [`ci/README.md`](ci/README.md) |
+| Business Analyst / Product Manager | [What Qato does](#what-qato-does), [Test suite strategy](#test-suite-strategy-smoke-vs-regression) |
+| DevOps Engineer | [Test suite strategy](#test-suite-strategy-smoke-vs-regression), [How tests run automatically](#how-tests-run-automatically-cicd), then [`ci/README.md`](ci/README.md) |
 
 ---
 
@@ -112,7 +112,8 @@ define things.
 | **Environment** | Which version of the app you're testing against — your local machine, the development server, staging (a pre-production copy), or production (the real, live site). |
 | **Environment file** (`.env.dev`, etc.) | A file listing which web addresses and login details to use for a given environment. Covered in [Setting up your environment](#3-set-up-your-environment). |
 | **Test suite** | A group of related automated tests. |
-| **Smoke test** | A quick, shallow test suite meant to answer "is anything obviously broken?" fast — not exhaustive, but fast enough to run on every code change. |
+| **Smoke test** | A quick, shallow test suite meant to answer "is anything obviously broken?" fast — not exhaustive, but fast enough to run on every code change. Full explanation: [Test suite strategy](#test-suite-strategy-smoke-vs-regression). |
+| **Regression test** | A broader, slower test suite that checks whether a recent change broke something that used to work. Full explanation: [Test suite strategy](#test-suite-strategy-smoke-vs-regression). |
 | **CI / CI-CD** | "Continuous Integration / Continuous Delivery" — running tests automatically (e.g. every time someone pushes code), instead of a person remembering to run them. |
 | **JUnit report** | A standard file format test tools use to record what passed, what failed, and why. Machine-readable; you won't usually read it directly. |
 | **Dashboard** | Qato's own web page that reads that report and shows it in a human-friendly way. See [The QA Dashboard](#the-qa-dashboard). |
@@ -280,6 +281,99 @@ A step-by-step checklist, roughly in the order worth checking:
 
 ---
 
+## Test suite strategy: smoke vs. regression
+
+Qato organizes its tests into two groups, called **suites**. Understanding the difference matters
+for everyone on this list, not just engineers — it explains why some checks happen in seconds on
+every code change, while others happen once a night, and why that's a deliberate choice rather
+than something not yet finished.
+
+### What is a smoke test?
+
+The term comes from hardware testing: plug something in, turn it on, and see if it visibly smokes
+before you bother testing anything more detailed. If it smokes, there's no point checking the
+finer details yet — something fundamental is broken.
+
+In software, a **smoke test** is the same idea: a small, fast set of checks that answer one
+question — **"is anything obviously broken?"** Not exhaustive. Not deep. Just fast enough to run
+constantly without anyone noticing the wait.
+
+In Qato, `@smoke` currently covers 3 things: can a creator log in, can a guest buy something, and
+does starting a member login trigger the expected next step. Nothing exotic — the load-bearing
+paths.
+
+### What is a regression test?
+
+A **regression** means something that used to work has stopped working — usually because of a
+recent change elsewhere in the system. A **regression suite** is a broader, slower set of checks
+built specifically to catch that: not just "is anything obviously broken," but "did this change
+quietly break something that used to be fine."
+
+In Qato, `@regression` includes everything `@smoke` covers, plus checks that are slower, need
+extra setup, or have real-world side effects that make them unsuitable for running dozens of times
+a day (more on that below).
+
+### Side by side
+
+| | `@smoke` | `@regression` |
+|---|---|---|
+| Question it answers | "Is anything obviously broken?" | "Did this change break something that used to work?" |
+| Typical speed | Seconds | Can include slower, heavier flows |
+| Breadth | Narrow — the critical paths only | Broad — includes `@smoke` plus more |
+| How often it runs | Every code push | Once a night, plus before a release |
+| Creates real data/side effects? | Avoided wherever possible | Sometimes — by design, see below |
+
+### When each suite runs
+
+| Trigger | Suite | Why |
+|---|---|---|
+| A developer runs tests locally before pushing | `@smoke` (`pnpm test:smoke`) | Fast personal sanity check, doesn't slow anyone down |
+| Every push / pull request | `@smoke` | Fast enough to run constantly without becoming a bottleneck |
+| Nightly, on a schedule | `@regression` (`pnpm test:regression`) | Thorough, but bounded to roughly once a day |
+| Before a release, run manually | `@regression` | Maximum confidence before something ships |
+
+A concrete example: a developer fixes a small bug in the storefront and pushes their branch.
+`@smoke` runs automatically in under a minute and confirms the core paths — creator login, guest
+checkout, member login — still work. Nobody waits around for anything slower. That night,
+`@regression` runs everything, including the slower and more involved checks, and reports back by
+morning. The team gets fast feedback on every single push, and deep feedback once a day, without
+either one getting in the other's way.
+
+### Why the Virtual Account payment flow is `@regression`, not `@smoke`
+
+This is worth walking through specifically, because it's a good example of a decision that isn't
+really about the tests themselves — it's about **operational impact**.
+
+The Virtual Account payment test (see [What's actually tested today](#whats-actually-tested-today))
+completes a real payment using Duitku's **sandbox** — a safe testing environment real payment
+providers offer, using fake money, so nobody has to risk real money to test a real payment flow.
+Even though it's a sandbox and no real money moves, **it still creates real records**: a real
+transaction on Duitku's side, and a real order in Qato's own development/staging database.
+
+That's a meaningful difference from most other tests, which just read the screen and check what's
+there. This one has a side effect every time it runs.
+
+Now consider the volume: `@smoke` runs on every single push. If a team pushes code 20 times in a
+day, running this test as part of `@smoke` would create 20 real sandbox transactions and 20 real
+test orders that day — with no process anywhere yet to clean any of them up. Running the same test
+only in the nightly `@regression` suite limits that to roughly once a day: a small, predictable,
+manageable number instead of an open-ended one.
+
+This is a **deliberate, temporary decision**, not a permanent limit — it's recorded formally as
+[ADR-001 in `docs/ENGINEERING.md`](docs/ENGINEERING.md#adr-001-virtual-account-payment-flow-stays-in-regression-not-smoke)
+for anyone who wants the full technical reasoning. It gets revisited once three things are true:
+
+1. There's a documented policy for what happens to this test data over time (cleaned up? archived?
+   left alone on purpose?).
+2. There's a clear, agreed schedule for how often the regression suite runs.
+3. There's confidence the operational impact — on the sandbox, on the database, on anyone looking
+   at order reports — is genuinely acceptable.
+
+Until then, `@regression` is the right home for it: real enough coverage to catch problems,
+without uncontrolled data growth every time someone pushes a one-line fix.
+
+---
+
 ## How tests run automatically (CI/CD)
 
 ```mermaid
@@ -303,7 +397,9 @@ rewriting how tests actually work. If you're setting this up for a team, see
 [`ci/README.md`](ci/README.md) for what secrets/credentials need to be configured first.
 
 There's also a nightly scheduled run (using the broader regression suite) and a manual "release
-gate" check — details in [`ci/README.md`](ci/README.md).
+gate" check — details in [`ci/README.md`](ci/README.md). If you're wondering why some tests only
+run nightly instead of on every push, see
+[Test suite strategy](#test-suite-strategy-smoke-vs-regression) above.
 
 ---
 
@@ -315,9 +411,10 @@ covered.
 - **The Member Area download test can't run unattended.** It needs a real, fresh 6-digit code from
   an actual inbox every time. There's no automated way to fetch that code yet, so this test always
   needs a human to supply it.
-- **The Virtual Account payment test also can't run fully unattended.** The exact amount to pay
-  (which includes a payment-gateway fee on top of the product price) has to be read off the
-  checkout page and supplied by hand — there's no way to extract it automatically yet.
+- **The Virtual Account payment test creates real data every run.** It now reads the payment
+  amount automatically (no manual input needed anymore), but each run creates a real transaction
+  in the payment sandbox and a real order in development/staging, with no cleanup process yet.
+  That's why it's not run on every push — only in the broader, less-frequent regression suite.
 - **The Dashboard shows only the latest run, not history.** There's no database yet — it reads the
   most recent report file directly. Trends over time aren't available.
 - **Only three environments are fully covered:** local, development, and staging use the same test
