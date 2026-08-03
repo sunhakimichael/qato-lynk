@@ -14,8 +14,8 @@ Page Objects, and CI pipelines, you probably want the technical reference instea
 | If you are a... | Start with |
 |---|---|
 | QA Manual tester / UAT team member | [What Qato does](#what-qato-does), [Reading a test report](#reading-a-test-report) |
-| Junior QA / QA Automation Engineer | [Getting started](#getting-started), [What's actually tested today](#whats-actually-tested-today), [Test suite strategy](#test-suite-strategy-smoke-vs-regression) |
-| Developer | [Getting started](#getting-started), then [`docs/ENGINEERING.md`](docs/ENGINEERING.md) |
+| Junior QA / QA Automation Engineer | [Getting started](#getting-started), [What's actually tested today](#whats-actually-tested-today), [Test suite strategy](#test-suite-strategy-smoke-vs-regression), [Running tests by application or category](#running-tests-by-application-or-category) |
+| Developer | [Getting started](#getting-started), [Running tests by application or category](#running-tests-by-application-or-category), then [`docs/ENGINEERING.md`](docs/ENGINEERING.md) |
 | Business Analyst / Product Manager | [What Qato does](#what-qato-does), [Test suite strategy](#test-suite-strategy-smoke-vs-regression) |
 | DevOps Engineer | [Test suite strategy](#test-suite-strategy-smoke-vs-regression), [How tests run automatically](#how-tests-run-automatically-cicd), then [`ci/README.md`](ci/README.md) |
 
@@ -210,6 +210,10 @@ There's also a broader **regression suite** (`pnpm test:regression`) that includ
 smoke plus a few more thorough checks — some of which need extra manual input (like the OTP code
 mentioned above) and will skip themselves cleanly if you don't provide it, rather than fail.
 
+You can also run tests for just one application (`pnpm test:cms`, `pnpm test:mylink`,
+`pnpm test:member`) or just payment-related tests (`pnpm test:payment`) — see
+[Running tests by application or category](#running-tests-by-application-or-category).
+
 ### 5. Look at the results
 
 Once tests finish, two things are generated automatically:
@@ -371,6 +375,36 @@ for anyone who wants the full technical reasoning. It gets revisited once three 
 
 Until then, `@regression` is the right home for it: real enough coverage to catch problems,
 without uncontrolled data growth every time someone pushes a one-line fix.
+
+---
+
+## Running tests by application or category
+
+The suite tags above (`@smoke`, `@regression`) answer "how thorough should this run be?" A
+separate set of tags answers a different question: "which part of the product does this touch?"
+Qato has three applications — the **CMS** (where creators manage their products), **MyLink** (the
+public storefront customers buy from), and the **Member Area** (where buyers access what they've
+bought) — and every test is tagged with which one it belongs to: `@cms`, `@mylink`, or `@member`.
+There's also `@payment`, for the subset of tests that complete an actual payment through a payment
+provider's sandbox, since those carry the operational considerations covered above.
+
+These two kinds of tags are independent, and a single test carries both. For example, the Virtual
+Account payment test is `@mylink` (it's a MyLink storefront flow), `@payment` (it completes a real
+payment), and `@regression` (see [Test suite strategy](#test-suite-strategy-smoke-vs-regression)
+for why it's not also `@smoke`) — all three at once.
+
+| Command | Description |
+| ---------------------- | ---------------------------------------- |
+| `pnpm test:cms` | Runs all CMS tests |
+| `pnpm test:mylink` | Runs all MyLink tests |
+| `pnpm test:member` | Runs all Member Area tests |
+| `pnpm test:smoke` | Runs all smoke tests |
+| `pnpm test:regression` | Runs all regression tests |
+| `pnpm test:payment` | Runs all payment tests |
+
+This is useful when you only care about one part of the product — for example, a developer who
+just changed something in the Member Area can run `pnpm test:member` and get an answer in seconds,
+instead of running everything.
 
 ---
 
