@@ -154,6 +154,47 @@ validated by their own schema (`factories/testData.schema.ts`), separate from `s
 connectivity schema, since fixture data is automation-specific and has no reason to be a
 dependency of the future dashboard app.
 
+## Application-domain tags
+
+Alongside the execution-suite tags (`@smoke`, `@regression`), every test also carries an
+application-domain tag: `@cms`, `@mylink`, or `@member`, plus `@payment` for tests that complete a
+real payment. These are two independent, orthogonal tag dimensions on the same flat Playwright tag
+array — no custom tagging framework, no hierarchy, just `--grep` on plain strings. That's the
+entire mechanism; it's deliberately this simple, per instruction ("keep the tagging strategy
+simple, scalable, and provider-agnostic").
+
+**Naming note:** the tag is `@mylink`, but the folder is `tests/public/` (and `pages/public/`,
+`locators/public/`). This mismatch is intentional, not an inconsistency to fix — `public` was the
+established folder name since Milestone 3, while `@mylink` matches the product's actual name (the
+original brief calls it "Public MyLink"). Renaming the folder wasn't requested and isn't free
+(touches every import across pages/locators/journeys/tests for that app), so the tag uses the
+product name while the folder keeps its existing structure.
+
+**`@payment` applied narrowly, not broadly.** Only `virtual-account-purchase.spec.ts` carries it —
+`guest-checkout.spec.ts` reaches the payment confirmation page but never completes an actual
+gateway payment (no VA/Duitku interaction), so it's `@mylink` only. `@payment` means "this test
+completes a real payment through a provider," not "this test's flow happens to pass through a
+checkout page."
+
+Current mapping, verified via `--grep`:
+
+| Test | Tags |
+|---|---|
+| `cms/login.spec.ts` | `@cms`, `@smoke`, `@regression` |
+| `public/guest-checkout.spec.ts` | `@mylink`, `@smoke`, `@regression` |
+| `public/virtual-account-purchase.spec.ts` | `@mylink`, `@payment`, `@regression` |
+| `member/request-otp.spec.ts` | `@member`, `@smoke`, `@regression` |
+| `member/download-purchased-content.spec.ts` | `@member`, `@regression` |
+
+```
+pnpm test:cms | test:mylink | test:member | test:smoke | test:regression | test:payment
+```
+
+Not wired into `ci/scripts/` — these are for targeted local/manual use (e.g. "I only changed the
+Member Area, just run those"). The CI pipelines still run `@smoke` (per push) and `@regression`
+(nightly/release); adding app-scoped CI jobs wasn't requested and isn't justified yet by suite size
+(5 tests total).
+
 ## Regression Suite (Milestone 11)
 
 ```

@@ -18,7 +18,7 @@ import { getTestProduct } from "../../factories";
  */
 test(
   "member can view content detail and download purchased content",
-  { tag: "@regression" },
+  { tag: ["@member", "@regression"] },
   async ({ page }) => {
     const otpCode = process.env.OTP_CODE;
     test.skip(

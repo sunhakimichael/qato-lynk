@@ -28,7 +28,7 @@ const KNOWN_PRODUCT_LINK_LABEL = "Japan Trip Ebook IDR 85k";
  */
 test(
   "guest can complete a Virtual Account purchase via Duitku sandbox",
-  { tag: "@regression" },
+  { tag: ["@mylink", "@payment", "@regression"] },
   async ({ page }) => {
     const { APP_ENV } = loadEnvConfig();
 

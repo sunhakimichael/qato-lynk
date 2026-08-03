@@ -18,12 +18,32 @@
       "outputs": ["reports/**"],
       "cache": false
     },
+    "test:cms": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["reports/**"],
+      "cache": false
+    },
+    "test:mylink": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["reports/**"],
+      "cache": false
+    },
+    "test:member": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["reports/**"],
+      "cache": false
+    },
     "test:smoke": {
       "dependsOn": ["^typecheck"],
       "outputs": ["reports/**"],
       "cache": false
     },
     "test:regression": {
+      "dependsOn": ["^typecheck"],
+      "outputs": ["reports/**"],
+      "cache": false
+    },
+    "test:payment": {
       "dependsOn": ["^typecheck"],
       "outputs": ["reports/**"],
       "cache": false
