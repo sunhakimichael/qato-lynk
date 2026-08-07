@@ -16,6 +16,10 @@ import { getBaseUrl, getCreatorSlug } from "./environments";
 export const cmsRoutes = {
   /** CMS login screen. Username/email + password. */
   login: (): string => `${getBaseUrl("cms")}/login`,
+  /** Password recovery screen. Confirmed via the real href on the login page's "Forgot Password?" link. */
+  forgotPassword: (): string => `${getBaseUrl("cms")}/forgot-password`,
+  /** The actual "Home" sidebar destination — distinct from My Lynk. Confirmed via the sidebar's real href. */
+  dashboard: (): string => `${getBaseUrl("cms")}/v2/admin/dashboard`,
   /** Post-login landing page. */
   myLynksHome: (): string => `${getBaseUrl("cms")}/admin/my-lynks/home`,
   /** Product Orders list. */

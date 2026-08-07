@@ -7,11 +7,15 @@ import { ThankYouPage } from "../../pages/public/ThankYouPage";
 import { DuitkuSandboxPage } from "../../pages/payment-providers/duitku/DuitkuSandboxPage";
 import type { VirtualAccountPaymentProvider } from "../../pages/payment-providers/VirtualAccountPaymentProvider";
 import { PaymentHelper } from "../../helpers/PaymentHelper";
-import { getTestMember } from "../../factories";
+import { getTestMember, getTestProduct, getTestPaymentMethod } from "../../factories";
 
 export interface VirtualAccountPurchaseOptions {
-  /** Exact accessible name of the product link, e.g. "Japan Trip Ebook IDR 85k". */
-  productLinkLabel: string;
+  /**
+   * Exact accessible name of the product link, e.g. "Japan Trip Ebook IDR
+   * 85k". Defaults to getTestProduct().linkLabel — pass explicitly only to
+   * override the configured product for a specific test.
+   */
+  productLinkLabel?: string;
   /**
    * Buyer email for guest checkout. Defaults to getTestMember().email
    * (the same account used by the Member Login/Library/Download journeys)
@@ -23,9 +27,9 @@ export interface VirtualAccountPurchaseOptions {
    * check the library. Override only if you don't need that chaining.
    */
   buyerEmail?: string;
-  /** 1-indexed position in the payment method list. Defaults to 6 — confirmed by this session to be "CIMB Niaga Virtual Account". */
+  /** 1-indexed position in the payment method list. Defaults to getTestPaymentMethod().position. */
   paymentMethodPosition?: number;
-  /** Exact channel label in Duitku's sandbox dropdown, e.g. "CIMB NIAGA VA". Passed through to the payment provider. */
+  /** Exact channel label in Duitku's sandbox dropdown. Defaults to getTestPaymentMethod().channelLabel. */
   channelLabel?: string;
   /** Defaults to a new DuitkuSandboxPage — override to use a different provider without touching this journey. */
   paymentProvider?: VirtualAccountPaymentProvider;
@@ -52,6 +56,11 @@ export interface VirtualAccountPurchaseResult {
  * entered matches what it was given, throwing PaymentMismatchError on any
  * discrepancy (see that class for details).
  *
+ * Product and payment method both resolve from config (TEST_PRODUCT_LINK_LABEL,
+ * TEST_PAYMENT_METHOD_*) by default and throw a clear error if neither
+ * config nor an explicit override supplies them — this framework never
+ * falls back to a hardcoded product or payment method.
+ *
  * Does NOT chain into Library/Download itself (see journeys/member/) —
  * those still require a separately-supplied OTP code, so combining them
  * here would just move that requirement rather than remove it. Call
@@ -60,14 +69,32 @@ export interface VirtualAccountPurchaseResult {
  */
 export async function completeVirtualAccountPurchase(
   page: Page,
-  options: VirtualAccountPurchaseOptions,
+  options: VirtualAccountPurchaseOptions = {},
 ): Promise<VirtualAccountPurchaseResult> {
-  const {
-    productLinkLabel,
-    buyerEmail,
-    paymentMethodPosition = 6,
-    channelLabel = "CIMB NIAGA VA",
-  } = options;
+  const productLinkLabel = options.productLinkLabel ?? getTestProduct().linkLabel;
+  if (!productLinkLabel) {
+    throw new Error(
+      "No product link label available: set TEST_PRODUCT_LINK_LABEL in your .env file for this " +
+        "environment, or pass productLinkLabel explicitly.",
+    );
+  }
+
+  const testPaymentMethod = getTestPaymentMethod();
+  const paymentMethodPosition = options.paymentMethodPosition ?? testPaymentMethod?.position;
+  if (paymentMethodPosition === undefined) {
+    throw new Error(
+      "No payment method position available: set TEST_PAYMENT_METHOD_POSITION in your .env file " +
+        "for this environment, or pass paymentMethodPosition explicitly.",
+    );
+  }
+
+  const channelLabel = options.channelLabel ?? testPaymentMethod?.channelLabel;
+  if (!channelLabel) {
+    throw new Error(
+      "No payment channel label available: set TEST_PAYMENT_METHOD_CHANNEL_LABEL in your .env " +
+        "file for this environment, or pass channelLabel explicitly.",
+    );
+  }
 
   const storefront = new PublicStorefrontPage(page);
   await storefront.goto();
@@ -77,7 +104,7 @@ export async function completeVirtualAccountPurchase(
   await productDetail.clickBuyNow();
 
   const checkout = new PublicCheckoutPage(page);
-  await checkout.fillEmail(buyerEmail ?? getTestMember().email);
+  await checkout.fillEmail(options.buyerEmail ?? getTestMember().email);
   await checkout.openPaymentMethodSelector();
   await checkout.selectPaymentMethodByPosition(paymentMethodPosition);
   await checkout.confirmPaymentMethod();

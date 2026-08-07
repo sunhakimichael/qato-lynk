@@ -31,6 +31,14 @@ describe("Route Registry", () => {
     expect(cmsRoutes.login()).toBe("https://cms.fixture.test/login");
   });
 
+  it("composes an absolute CMS forgot-password URL", () => {
+    expect(cmsRoutes.forgotPassword()).toBe("https://cms.fixture.test/forgot-password");
+  });
+
+  it("composes an absolute CMS dashboard URL", () => {
+    expect(cmsRoutes.dashboard()).toBe("https://cms.fixture.test/v2/admin/dashboard");
+  });
+
   it("composes an absolute CMS my-lynks home URL", () => {
     expect(cmsRoutes.myLynksHome()).toBe("https://cms.fixture.test/admin/my-lynks/home");
   });

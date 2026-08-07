@@ -2,29 +2,25 @@ import { loadEnvConfig, type AppEnv } from "@qato/shared";
 import { test } from "../../fixtures";
 import { completeVirtualAccountPurchase } from "../../journeys/purchase/completeVirtualAccountPurchase.journey";
 import { expectVirtualAccountPaymentDisplayed, expectThankYouPageConfirmed } from "../../assertions";
+import { getTestProduct, getTestPaymentMethod } from "../../factories";
 
 /**
- * Milestone 10 scope, per instruction: Development and Staging only. Both
- * currently use the same product ("Japan Trip Ebook"), matching the
- * verified product-link label from Milestone 6's guest-checkout test.
+ * Business-scope decision (ADR-001, docs/ENGINEERING.md), not test data —
+ * a sandbox payment flow has no reason to run against production
+ * regardless of what's configured. Stays code-level deliberately.
  */
 const SUPPORTED_ENVIRONMENTS: AppEnv[] = ["local", "development", "staging"];
-const KNOWN_PRODUCT_LINK_LABEL = "Japan Trip Ebook IDR 85k";
 
 /**
  * No longer requires manual input — the payment amount is read directly
- * from MyLink's invoice section via PaymentHelper.getPaymentAmount(),
- * matching your source-of-truth requirement (see
- * journeys/purchase/completeVirtualAccountPurchase.journey.ts and
- * helpers/PaymentHelper.ts).
+ * from MyLink's invoice section via PaymentHelper.getPaymentAmount().
+ * Product and payment method are both fully config-driven now
+ * (TEST_PRODUCT_LINK_LABEL, TEST_PAYMENT_METHOD_*) — changing either in
+ * an .env file is enough, no code change needed.
  *
- * Still tagged @regression, not @smoke — that's now a deliberate choice,
- * not a technical limitation. Every run of this test creates a real
- * transaction in Duitku's sandbox and a real order in dev/staging.
- * Running it on every push (via @smoke) would accumulate that data
- * indefinitely with no cleanup anywhere in this project. Promoting it to
- * @smoke is a real option now, but it's a test-data-hygiene decision to
- * make deliberately, not a side effect of this fix.
+ * Tagged @regression, not @smoke — a deliberate decision, not a
+ * technical limitation. Every run creates a real transaction in Duitku's
+ * sandbox and a real order in dev/staging. See ADR-001.
  */
 test(
   "guest can complete a Virtual Account purchase via Duitku sandbox",
@@ -34,14 +30,20 @@ test(
 
     test.skip(
       !SUPPORTED_ENVIRONMENTS.includes(APP_ENV),
-      `Virtual Account payment is only in scope for local/development/staging (Milestone 10). Current APP_ENV="${APP_ENV}".`,
+      `Virtual Account payment is only in scope for local/development/staging (ADR-001). Current APP_ENV="${APP_ENV}".`,
     );
 
-    const { paymentStatusPage, thankYouPage } = await completeVirtualAccountPurchase(page, {
-      productLinkLabel: KNOWN_PRODUCT_LINK_LABEL,
-    });
+    const { linkLabel } = getTestProduct();
+    const paymentMethod = getTestPaymentMethod();
 
-    await expectVirtualAccountPaymentDisplayed(paymentStatusPage, "CIMB Niaga Virtual Account");
+    test.skip(
+      !linkLabel || !paymentMethod,
+      "TEST_PRODUCT_LINK_LABEL or TEST_PAYMENT_METHOD_* is not configured for this environment — see .env.example.",
+    );
+
+    const { paymentStatusPage, thankYouPage } = await completeVirtualAccountPurchase(page);
+
+    await expectVirtualAccountPaymentDisplayed(paymentStatusPage, paymentMethod!.displayName);
     await expectThankYouPageConfirmed(thankYouPage);
   },
 );

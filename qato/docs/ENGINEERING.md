@@ -93,6 +93,12 @@ Sandbox. Payment provider isolated behind `VirtualAccountPaymentProvider` — se
 **Milestone 11 complete:** Regression suite. `@smoke` is now a subset of `@regression`, not a
 separate invented suite — see "Regression Suite (Milestone 11)" below for why.
 
+**Reusability refactor complete:** removed the last two hardcoded test-data literals from the
+codebase (product link label, payment method position/channel). Every value in the "reusable by
+any QA engineer" list — CMS credentials, member email, creator account, product, price, payment
+method, environment-specific values — is now config-driven with zero code changes required. See
+"Config-driven test data" below.
+
 ## Requirements
 
 - Node 22.x (see `.nvmrc`)
@@ -145,14 +151,66 @@ not relative, because Journeys cross applications on different domains (e.g. Pub
 Member Area), so relying on a single Playwright project's `baseURL` for relative navigation
 would break mid-journey.
 
-## Test Data
+## Config-driven test data
 
-`getTestCreator()`, `getTestMember()`, `getTestProduct()` (in `automation/playwright/factories/`)
-are the single facade for QA fixtures. All values come from the per-environment `.env.*` files —
-nothing is hardcoded in test or journey code. Product fixture fields (`TEST_PRODUCT_*`) are
-validated by their own schema (`factories/testData.schema.ts`), separate from `shared`'s
-connectivity schema, since fixture data is automation-specific and has no reason to be a
-dependency of the future dashboard app.
+`getTestCreator()`, `getTestMember()`, `getTestProduct()`, `getTestPaymentMethod()` (in
+`automation/playwright/factories/`) are the single facade for QA fixtures. All values come from
+the per-environment `.env.*` files — nothing is hardcoded in test or journey code. Product fixture
+fields (`TEST_PRODUCT_*`) are validated by their own schema (`factories/testData.schema.ts`),
+separate from `shared`'s connectivity schema, since fixture data is automation-specific and has no
+reason to be a dependency of the future dashboard app.
+
+**The reusability goal:** any QA engineer or team member should be able to change CMS credentials,
+member email, creator account, product, price, payment method, or environment-specific values by
+editing an `.env.*` file only — the automation code itself should never need to change.
+
+**Two fields were previously hardcoded in test files, violating that goal:**
+
+- `TEST_PRODUCT_LINK_LABEL` — the exact accessible-name text of the product link on the storefront
+  (e.g. "Japan Trip Ebook IDR 85k"). This existed as a literal string (or a hardcoded per-environment
+  map) inside `guest-checkout.spec.ts` and `virtual-account-purchase.spec.ts`. Changing
+  `TEST_PRODUCT_NAME` in config did nothing — the test still clicked the old hardcoded text.
+- `TEST_PAYMENT_METHOD_POSITION` / `_CHANNEL_LABEL` / `_DISPLAY_NAME` — existed as hardcoded default
+  function parameters (`= 6`, `= "CIMB NIAGA VA"`) in the journey files.
+
+**Why these were hardcoded in the first place, and why the fix is "add a field," not "add a
+formatter":** the storefront's price-display formatting rule (e.g. "85k" for 85,000) was never
+verified for all price ranges — flagging that and refusing to guess was correct at the time (see
+Payment Completion below). The bug was hardcoding the *literal value* into test files instead of
+externalizing it as an optional config field. `TEST_PRODUCT_LINK_LABEL` is now that field: a human
+who can see the real storefront page types in the exact text they see, and the code never has to
+compute or guess a formatting rule.
+
+**Schema design:**
+- All four new fields (`TEST_PRODUCT_LINK_LABEL`, `TEST_PAYMENT_METHOD_POSITION`,
+  `TEST_PAYMENT_METHOD_CHANNEL_LABEL`, `TEST_PAYMENT_METHOD_DISPLAY_NAME`) are **optional** in the
+  Zod schema, not required. An environment where the display format or payment method hasn't been
+  verified (production, today) simply leaves them blank — tests needing them skip with a clear
+  reason instead of the schema throwing a hard validation error that would break every test in that
+  environment, including ones that don't need these fields at all.
+- A cross-field `.refine()` requires `TEST_PRODUCT_LINK_LABEL` to contain `TEST_PRODUCT_NAME` as a
+  substring whenever it's set — catches the exact stale-data failure mode where someone updates the
+  product name but forgets the link label.
+- `getTestPaymentMethod()` is deliberately all-or-nothing: it returns a complete
+  `TestPaymentMethod` or `undefined`, never a partially-filled object. Simpler to reason about than
+  three independently-optional fields, at the cost of the journey's channel-label error message
+  being reachable only via an explicit partial override, not via config alone (see the unit tests
+  in `journeys/purchase/__tests__/` for what this actually means in practice).
+
+**Journeys resolve config, never hardcode a fallback.** Where a journey previously did
+`paymentMethodPosition = 6`, it now does `options.paymentMethodPosition ?? getTestPaymentMethod()?.position`,
+and **throws a clear, named error** — e.g. `"No payment method position available: set
+TEST_PAYMENT_METHOD_POSITION in your .env file..."` — if neither an override nor config supplies a
+value. This is the same "fail loud, don't guess" discipline used everywhere else in this project
+(the DuitkuSandboxPage readback check, the env schema validation). Proven with unit tests using a
+fake `Page` object cast (`{} as Page`) — the validation throws before any browser interaction, so
+no real browser is needed to test it.
+
+**What deliberately stayed code-level, not config:** which environments run the Virtual Account
+payment test at all (`SUPPORTED_ENVIRONMENTS` in the test file). That's a business-policy decision
+(ADR-001) — a sandbox payment flow has no reason to run against production — not test data.
+Folding it into config would let someone accidentally enable real sandbox transactions in
+production just by filling in an unrelated text field.
 
 ## Application-domain tags
 
@@ -417,6 +475,133 @@ Library → Download needs Page Objects for pages nobody has recorded yet. Build
 would mean empty or invented content, which this project explicitly avoids. Same reasoning applies
 to `requestMemberOtp()`: it stops at the OTP challenge appearing, since completing verification
 needs a real one-time code and the OTP entry UI was never captured.
+
+## CMS Locator Registry (HTML-driven asset building)
+
+Starting point: a set of real HTML files (not codegen) for CMS pages, provided incrementally.
+Unlike Milestones 3/7/10 (codegen-driven), this work is HTML-driven — locators are extracted
+directly from real markup rather than recorded interactions. Same discipline applies: no invented
+selectors, explain any substitution, verify claims against the actual source rather than assert
+them.
+
+**Priority order enforced**: `data-testid` → `id`/`name` → accessibility (role/label/text) → CSS
+→ XPath (last resort, flagged when used). Every locator in this registry is annotated with which
+tier it used and why, especially when it deviates from what codegen would have generated.
+
+**Progress so far:**
+
+| Page | Status |
+|---|---|
+| Login | Locators upgraded (id > accessibility), Page Object extended |
+| Forgot Password | Built from scratch |
+| Home (Dashboard) | Built from scratch, 3 shared shell components extracted |
+| My Lynk, My Lynk block-type pages, Vouchers, Settings (×7), Orders, Product, My Purchase, Affiliates, Statistics | Not yet started |
+
+### ⚠️ Naming ambiguity discovered — needs a decision
+
+Processing the Home page surfaced a real naming collision that predates this work:
+
+- The sidebar's **"Home"** link points to `/v2/admin/dashboard` — this is what a real user means by
+  "Home" in the CMS.
+- The **existing** `CmsHomePage` (built in Milestone 3, from codegen) actually models
+  `/admin/my-lynks/home` — the **My Lynk** section, not Home/Dashboard at all. It's used as the
+  post-login landing target in `loginAsCreator()`.
+
+These are two genuinely different pages that happen to share a confusing name. Rather than
+silently rename or break existing, working code (`CmsHomePage` is used by `loginAsCreator` and
+`viewProductOrders`), a new `CmsDashboardPage` was built for the real Home/Dashboard page instead
+— they now coexist under distinguishable names. **Recommended follow-up** (not done yet, needs a
+decision): rename `CmsHomePage` → `CmsMyLynkPage` (and `cmsHomeLocators` → `cmsMyLynkLocators`)
+for clarity, updating the two journeys that reference it. Flagging this rather than doing it
+unprompted, since it touches existing working code.
+
+### Shared shell components (new)
+
+Discovered while processing Home, and — as expected — these are present on every authenticated
+CMS page, not just this one:
+
+- **`CmsSidebarNav`** (`components/CmsSidebarNav.ts`) — every section link in the persistent
+  sidebar. One named method per section (not a generic string dispatcher), for type safety and
+  discoverability.
+- **`CmsHeader`** (`components/CmsHeader.ts`) — page title heading, notifications link/badge.
+- **`ShareModal`** (`components/ShareModal.ts`) — same reusable-modal pattern as `OtpModal` from
+  the Member Area.
+
+### A real locator bug caught by verification, not assumed correct
+
+Three sidebar links — **Orders**, **My Purchase**, **Automate Workflow** — carry dynamic content
+(a pending-count badge, or a "Beta" tag) directly inside the link, making their actual accessible
+name `"Orders 3"`, `"My Purchase 0"`, `"Automate Workflow Beta"` — not the clean label text. A
+naive `getByRole('link', { name: 'Orders' })` would have failed to match in real execution.
+Caught this by running real `cheerio` queries against the actual HTML and comparing expected vs.
+actual accessible text — not by inspecting the markup by eye. Fixed by using `href`-based CSS
+selectors for these three specifically (verified unique within `#aside`), while every other
+sidebar link keeps role+name, which was verified clean. Badge values themselves
+(`ordersBadge`, `myPurchaseBadge`) are also captured, since pending-count assertions are a
+plausible future need.
+
+### Home (Dashboard) page-specific findings
+
+- **Two elements share `href="/admin/settings"`** — an "Upgrade to PRO" link and an icon-only
+  arrow shortcut. Verified via direct query which is which and in what DOM order, rather than
+  assuming; `.last()` correctly resolves to the icon shortcut.
+- **`data-earnings`, `data-text-views`, `data-text-clicks`** are real attributes holding raw
+  numeric values independent of the UI's masked/unmasked display state — read these directly for
+  any future assertion rather than parsing visible text (which alternates with a placeholder like
+  "— — . — — —" when earnings are hidden).
+- **The PayMe "Activate" modal (`#myModal`) was not modeled.** Its trigger button is wrapped in an
+  HTML comment in this snapshot — PayMe is already active for this test account, so the activation
+  prompt never renders. The modal's own markup exists in the DOM, but nothing reaches it from this
+  page's current state. Revisit with HTML from a deactivated-PayMe account if this flow is needed.
+- **`creatorDisplayName` is genuinely fragile** — no id/data-testid/semantic role exists for it,
+  only shared Tailwind utility classes. Flagged clearly in the locator's own comment as the
+  lowest-confidence one on this page.
+
+### Login page — real findings, not assumptions
+
+- **Upgraded `usernameInput`/`passwordInput` from accessibility to id-based.** The original
+  codegen-derived locators (`getByRole('textbox', { name: 'Your username or email' })`) worked,
+  but the real HTML shows `<label for="">` — an empty `for` attribute, not actually bound to the
+  input. That means the accessible name only ever came from placeholder text, which is far more
+  likely to change (copy edits, i18n) than the real `id="username"` / `id="pwd1"` attributes now
+  confirmed present. Per the stated priority order, id wins.
+- **Found a real duplicate-id bug in the app's own markup.** `id="curr-user-cell"` appears twice —
+  once in the visible login section, once in the hidden registration section (near-identical
+  markup, toggled via a real `hidden` attribute). A `#curr-user-cell` locator would violate
+  Playwright's strict-mode uniqueness requirement. Used role-based matching instead
+  (`getByRole('link', { name: 'Continue with Google' })`), which correctly resolves to only the
+  visible link since Playwright's accessibility tree excludes `hidden` elements. **Verified**, not
+  asserted: ran a real `cheerio` DOM query against the actual uploaded file —
+  `$('#curr-user-cell').length` returns `2`, both containing "Continue with Google".
+- **Password visibility toggle button has no id/data-testid of its own**, but wraps an icon with a
+  real id (`#eyeIcon1`). Used `button:has(#eyeIcon1)` — CSS, but anchored to a real stable id
+  rather than a positional/structural selector.
+- **No captcha locator was created for the login page.** The page's JS conditionally checks for
+  one (`document.querySelector('input[name="code"]')`), but no such element exists in this HTML
+  snapshot — it may only render conditionally (e.g. after failed attempts). Revisit with fresh
+  HTML/codegen if that scenario needs coverage.
+
+### Forgot Password page — a real automation blocker found
+
+- `emailInput` uses `input[name="user_email"]` — no id present, name is the best available tier.
+- **A real Cloudflare Turnstile widget (`#cf-turnstile`) is present and rendered.** This is a
+  genuine anti-bot challenge, not decorative. Flagged clearly in both the locator and the Page
+  Object: actual form submission on this page will likely be blocked without a known test sitekey
+  or server-side bypass, which there's no evidence of yet. The locator exists for presence
+  assertions only until that's resolved.
+- **An older canvas-based captcha exists in the page's source but was correctly excluded** — it's
+  wrapped in an HTML comment (`<!-- ... -->`) and never rendered. Verified via `cheerio`:
+  `$('#canvas').length` returns `0` against the real file. Not creating a locator for markup that
+  doesn't actually render is the same discipline as not inventing one that was never recorded.
+
+### On extracting components only when reuse is actually confirmed
+
+Login and Forgot Password (processed first, before any authenticated page) didn't share any
+sub-widget worth a `components/` abstraction — correctly not extracted at the time. The shared
+shell (`CmsSidebarNav`, `CmsHeader`, `ShareModal`) only got extracted once Home confirmed the
+pattern actually repeats (every authenticated page sits inside the same `<aside>`/`<header>`
+shell) — not preemptively based on a guess that it might. Same discipline going forward: extract
+a component when a second real page confirms the pattern, not on the first sighting.
 
 ## Page Objects (Milestone 3)
 

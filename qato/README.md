@@ -181,6 +181,44 @@ environment file you're using) and replace `CHANGE_ME`.
 Don't have real CMS credentials yet? That's fine — the guest checkout test doesn't need them, so
 you can still run part of the suite while you sort that out.
 
+**Everything Qato tests with is configurable this way — nothing is hardcoded in the automation
+code itself.** If your team's test product changes, a payment method changes, or you're setting
+this up against a different creator account, you only ever need to edit these files.
+
+Every variable falls into one of four categories, and `.env.example` labels each one so you never
+have to guess:
+
+| Status | Meaning |
+|---|---|
+| **Required** | Every environment must have a real value here, or tests will fail with a clear validation error at startup. |
+| **Optional** | Safe to leave blank. Any test that needs it will skip itself with a clear message rather than fail or guess. |
+| **Verified** | Confirmed correct against the real application (usually via Playwright's recording tool). |
+| **Unverified — left blank** | Nobody has confirmed the real value yet. Left blank on purpose rather than guessed, so a wrong guess never quietly becomes "how the test works." |
+
+| To change... | Edit this variable | Status |
+|---|---|---|
+| CMS login | `CMS_USERNAME`, `CMS_PASSWORD` | Required — currently a placeholder (`CHANGE_ME`) until your team fills in real credentials |
+| Member Area test account | `MEMBER_EMAIL` | Required, verified |
+| Creator account | `CREATOR_SLUG` | Required, verified |
+| Product being purchased | `TEST_PRODUCT_NAME`, `TEST_PRODUCT_PRICE`, `TEST_PRODUCT_TYPE`, `TEST_PRODUCT_CURRENCY` | Required, verified |
+| Exact text of the product link on the storefront | `TEST_PRODUCT_LINK_LABEL` | Optional — verified for local/development/staging; unverified and left blank in production (see below) |
+| Payment method used for the Virtual Account test | `TEST_PAYMENT_METHOD_POSITION`, `TEST_PAYMENT_METHOD_CHANNEL_LABEL`, `TEST_PAYMENT_METHOD_DISPLAY_NAME` | Optional — verified for local/development/staging; intentionally blank in production, for a different reason (see below) |
+| Which environment/URLs are being tested | Which `.env.*` file you're editing, or `APP_ENV` | Required, verified |
+
+**Why production leaves two things blank, and why they're not the same kind of "blank":**
+
+- `TEST_PRODUCT_LINK_LABEL` is blank in production because nobody has confirmed what the real text
+  looks like there yet — the storefront formats prices differently depending on the amount, and
+  production's test product is priced low enough that the formatting rule is genuinely unknown.
+  This is a "we haven't checked yet" blank.
+- The payment method fields are blank in production for a completely different reason: the
+  Virtual Account payment test uses a payment provider's **sandbox** (safe fake-money testing
+  environment), and a sandbox has no reason to ever run against the real production site,
+  regardless of whether anyone's confirmed a value for it. This is a "doesn't apply here" blank.
+
+Either way, a test that needs a missing value skips itself with a message telling you exactly
+which variable to fill in — it never fails confusingly, and it never guesses.
+
 ### 4. Run the tests
 
 To run the smoke suite (the fast, everyday check):

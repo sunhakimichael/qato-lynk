@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetEnvConfigCache } from "@qato/shared";
-import { getTestCreator, getTestMember, getTestProduct } from "../testData";
+import { getTestCreator, getTestMember, getTestProduct, getTestPaymentMethod } from "../testData";
 
 function setFixtureEnv(overrides: Partial<Record<string, string>> = {}): void {
   const base: Record<string, string> = {
@@ -19,6 +19,14 @@ function setFixtureEnv(overrides: Partial<Record<string, string>> = {}): void {
     TEST_PRODUCT_PRICE: "50000",
     TEST_PRODUCT_CURRENCY: "IDR",
   };
+
+  // process.env is a shared global across every test in this file —
+  // explicitly clear the optional fields so a value set by one test
+  // never leaks into a later test that expects it to be absent.
+  delete process.env.TEST_PRODUCT_LINK_LABEL;
+  delete process.env.TEST_PAYMENT_METHOD_POSITION;
+  delete process.env.TEST_PAYMENT_METHOD_CHANNEL_LABEL;
+  delete process.env.TEST_PAYMENT_METHOD_DISPLAY_NAME;
 
   for (const [key, value] of Object.entries({ ...base, ...overrides })) {
     process.env[key] = value;
@@ -68,5 +76,47 @@ describe("Test Data factory", () => {
   it("rejects a non-numeric product price", () => {
     setFixtureEnv({ TEST_PRODUCT_PRICE: "not-a-number" });
     expect(() => getTestProduct()).toThrow(/TEST_PRODUCT_PRICE/);
+  });
+
+  it("reads the product link label when configured", () => {
+    setFixtureEnv({ TEST_PRODUCT_LINK_LABEL: "Fixture Ebook IDR 50k" });
+    expect(getTestProduct().linkLabel).toBe("Fixture Ebook IDR 50k");
+  });
+
+  it("returns an undefined link label when not configured (e.g. unverified in production)", () => {
+    expect(getTestProduct().linkLabel).toBeUndefined();
+  });
+
+  it("treats an empty-string link label the same as unset (dotenv quirk)", () => {
+    setFixtureEnv({ TEST_PRODUCT_LINK_LABEL: "" });
+    expect(getTestProduct().linkLabel).toBeUndefined();
+  });
+
+  it("rejects a link label that doesn't contain the product name (stale-data guard)", () => {
+    setFixtureEnv({ TEST_PRODUCT_LINK_LABEL: "Some Other Product IDR 10k" });
+    expect(() => getTestProduct()).toThrow(/must contain TEST_PRODUCT_NAME/);
+  });
+
+  it("returns the full payment method when all fields are configured", () => {
+    setFixtureEnv({
+      TEST_PAYMENT_METHOD_POSITION: "6",
+      TEST_PAYMENT_METHOD_CHANNEL_LABEL: "CIMB NIAGA VA",
+      TEST_PAYMENT_METHOD_DISPLAY_NAME: "CIMB Niaga Virtual Account",
+    });
+
+    expect(getTestPaymentMethod()).toEqual({
+      position: 6,
+      channelLabel: "CIMB NIAGA VA",
+      displayName: "CIMB Niaga Virtual Account",
+    });
+  });
+
+  it("returns undefined when payment method fields are not configured (e.g. production)", () => {
+    expect(getTestPaymentMethod()).toBeUndefined();
+  });
+
+  it("returns undefined when only some payment method fields are configured", () => {
+    setFixtureEnv({ TEST_PAYMENT_METHOD_POSITION: "6" });
+    expect(getTestPaymentMethod()).toBeUndefined();
   });
 });

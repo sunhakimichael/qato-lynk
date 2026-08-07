@@ -47,13 +47,9 @@ export function loadEnvConfig(rootDir: string = process.cwd()): EnvConfig {
   // dotenv leaves unset-but-declared variables as empty strings (e.g.
   // "API_BASE_URL="). Treat those as absent so optional fields validate
   // correctly instead of failing url()/email() checks on "".
-  // Also trim values so accidental surrounding whitespace doesn't break validation.
   const rawMerged: Record<string, string | undefined> = { ...process.env, APP_ENV: appEnv };
   const normalized = Object.fromEntries(
-    Object.entries(rawMerged).map(([key, value]) => {
-      const normalizedValue = typeof value === "string" ? value.trim() : value;
-      return [key, normalizedValue === "" ? undefined : normalizedValue];
-    }),
+    Object.entries(rawMerged).map(([key, value]) => [key, value === "" ? undefined : value]),
   );
 
   const parsed = EnvConfigSchema.safeParse(normalized);
