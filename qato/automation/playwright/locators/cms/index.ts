@@ -1,5 +1,8 @@
 export { cmsLoginLocators } from "./loginPage.locators";
 export { cmsForgotPasswordLocators } from "./forgotPasswordPage.locators";
 export { cmsDashboardLocators } from "./dashboardPage.locators";
+export { cmsMyLynkLocators } from "./myLynkPage.locators";
+export { cmsAddImageBlockLocators } from "./addImageBlockPage.locators";
+export { cmsAddTextBlockLocators } from "./addTextBlockPage.locators";
 export { cmsHomeLocators } from "./homePage.locators";
 export { cmsOrdersLocators } from "./ordersPage.locators";

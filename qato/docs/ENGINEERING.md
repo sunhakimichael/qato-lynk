@@ -495,7 +495,144 @@ tier it used and why, especially when it deviates from what codegen would have g
 | Login | Locators upgraded (id > accessibility), Page Object extended |
 | Forgot Password | Built from scratch |
 | Home (Dashboard) | Built from scratch, 3 shared shell components extracted |
-| My Lynk, My Lynk block-type pages, Vouchers, Settings (×7), Orders, Product, My Purchase, Affiliates, Statistics | Not yet started |
+| My Lynk | Built from scratch, 3 more reusable components extracted (58 real block instances verified) |
+| Add Image / Add Text blocks | Built from scratch, 1 shared component extracted (`BlockOptionsToggle`) |
+| Add Link / Add Video / Add Social Connect blocks | Not started — see note below |
+| Vouchers, Settings (×7), Orders, Product, My Purchase, Affiliates, Statistics, remaining Monetization block types | Not yet started |
+
+## Add Image / Add Text Block Pages — Findings
+
+### Scope note: why only 2 of 5 Basic block types this round
+
+Compared the actual HTML of all 5 Basic block-type pages (Image, Text, Link, Video, Social
+Connect) before writing any code, specifically to test the hypothesis that they share one common
+form. **They don't, uniformly** — see the table below. Rather than build all 5 off an assumed
+shared schema and risk shipping wrong Page Objects for the ones that differ, only the two pages
+whose fields were fully read and verified (Image, Text) were built this round. Link, Video, and
+Social Connect need the same full-read treatment before their Page Objects are trustworthy.
+
+| Field | Image | Text | Link | Video | Social Connect |
+|---|---|---|---|---|---|
+| `<form id="form">` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `title` input | ✅ "Enter Block Name" | ❌ | ✅ "Title here" | ❌ | ❌ |
+| `on` toggle (Show/Hide) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `fav` toggle (Highlight) | ✅ | ✅ | ✅ | ❌ | ✅ |
+| `pkey` hidden field | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Cancel link | ✅ (`/admin/my-lynks`) | ✅ (`/admin/my-lynks/home`) | ✅ (`/admin/my-lynks/home`) | ✅ (`/admin/my-lynks/home`) | ❌ |
+
+Social Connect isn't an "add a new instance" form at all — no `<form>`, no title, and its own
+`on`/`fav` toggles POST to different endpoints (`/process/digital/connnect/toggle/...`) than what
+Image/Text/Link/Video use. It's a feature-level settings panel, not a repeatable block type.
+Structurally closer to a Settings page than to its four Basic siblings — worth keeping that framing
+in mind when its turn comes.
+
+### Application issues
+
+- **Cancel link destination is inconsistent.** Image's Cancel goes to `/admin/my-lynks`; Text,
+  Link, and Video's Cancel goes to `/admin/my-lynks/home`. Same button, same semantic action,
+  different redirect target depending on which page you're on. Likely an oversight rather than
+  intentional, but not changed — flagging for the product/dev team to confirm.
+- **Typo in Social Connect's backend endpoints**: `/process/digital/connnect/toggle/activation`
+  and `/process/digital/connnect/toggle/favourite` — "connnect" with three n's, confirmed in the
+  real HTML. Functional either way (it's just a URL path), but worth a heads-up since it'll look
+  like a mistake to anyone reading the network log.
+- **Discrepancy between visible UI text and developer's own code comment on the Text block page.**
+  The Highlight toggle's tooltip says "Add wiggle effect to the block." A developer's own inline
+  HTML comment on the same page says: *"The effect on front end is the Text will become Bold"*
+  (their comment, with the same typo — "efffect" — kept as-is here as a direct quote of what's in
+  the source). One of these is wrong, or the tooltip text is stale from a previous version of the
+  feature. Not resolved here — flagging for confirmation, not guessing which one is current
+  behavior.
+
+### Automation considerations
+
+- **Do not assume a uniform "add block form" schema across block types.** Verified against all 5
+  Basic pages before writing code: `title`, `fav`, and `pkey` are each present on some pages and
+  absent on others, in different combinations. A generic `AddBlockFormBase` built from one or two
+  samples would have been wrong for at least 2 of these 5 pages. Each block type gets its own
+  locator/Page Object; only the confirmed-identical `on`/`fav` toggle pattern was extracted into
+  `BlockOptionsToggle`.
+- **The Text block's rich-text editor targets `.note-editable`, not the underlying `<textarea
+  id="description">`.** That textarea is a Summernote artifact (holds raw HTML source, hidden from
+  the user) and isn't even unique — two elements share that id/name in the real markup. Filling it
+  directly wouldn't reflect what a real user does, and the duplicate id would be ambiguous anyway.
+- **`BlockOptionsToggle` is a distinct component from `BlockListItem`'s show/hide + highlight
+  methods**, despite representing the same underlying concept. These add-block forms use plain
+  checkboxes submitted with the form on creation; the block list's own toggles fire immediate AJAX
+  calls against an existing block's id. Same idea, different mechanics — kept separate rather than
+  forced into one shared abstraction that would need conditional logic for each mode.
+
+### Recommended improvements
+
+- Confirm with the dev team whether Image's differing Cancel destination is intentional; if not,
+  worth a one-line fix on their end (not changed here, per instruction to never modify application
+  behavior).
+- Confirm which is authoritative for the Highlight toggle's real effect on Text blocks — the UI
+  tooltip ("wiggle") or the code comment ("bold") — before writing any assertion that depends on
+  the visual result of toggling it.
+
+## My Lynk — Findings
+
+### Application issues
+
+- **Digital Product's "Add Block" link uses `href="javascript:void(0)"`**, while every other block
+  type (Image, Text, Link, Video, Social Connect, Blog, Course Video, etc.) uses a real, direct
+  href. Confirmed against the real HTML — not an extraction artifact. Possibly intentional (the
+  uploaded set also includes a separate `mylink-digitalproduct-template.html`, suggesting an
+  intermediate template-selection step), but worth confirming with the product team if it's meant
+  to behave differently from every sibling block type.
+- **Delete/Duplicate/Show-Hide/Highlight actions are inconsistently available across block
+  cards, including between cards of the identical block type.** Checked all 58 real block
+  instances, not just one sample: 19 are missing at least one of these actions. Several `my-products`
+  cards specifically vary from each other (some can't be duplicated, some can't be deleted, one
+  can't be shown/hidden) despite being the same block type. This may be legitimate business logic
+  (e.g. a product with existing orders can't be deleted) or may be an inconsistency worth a product
+  team review — the HTML alone doesn't say which, and no application behavior was changed to find
+  out.
+
+### Automation considerations
+
+- **`BlockListItem`'s action methods will fail if called on a card that doesn't have that action**
+  — this is correct, expected behavior given the above finding, not a bug in the component. Any
+  journey/test using `toggleShowHide()`, `clickDuplicate()`, etc. should not assume every card
+  supports every action; check availability first if the target card's type/state isn't already
+  known.
+- **Every block card's own id, and every action's onclick handler, embeds a database-generated,
+  per-instance id** (e.g. `686d0adb3e382fe2a6d0794b-1406-...`). None of these appear anywhere in
+  the Locator Registry — they're not stable across environments or accounts. `BlockListItem` is
+  always constructed from a caller-supplied scoped `Locator` (by position or by matching text),
+  never from a hardcoded id.
+- **Position-based scoping (`blockListItemByPosition`) is more fragile than text-based
+  (`blockListItemByText`)** for this specific list: it supports drag-reorder (confirmed —
+  `ui-sortable` class present) and blocks can be added/removed, so an index that's correct today
+  may not be tomorrow. Prefer matching on stable visible content (a block's title) where the
+  content itself won't change during a test.
+
+### Recommended improvements
+
+- If block-type-specific action modeling becomes necessary later (e.g. once it's confirmed which
+  states/types genuinely lack which actions), consider per-type configuration rather than
+  hardcoding assumptions into `BlockListItem` itself — not justified yet given the current
+  uncertainty about *why* actions vary.
+- Recommend the product team confirm whether the Delete/Duplicate/Show-Hide/Highlight
+  inconsistency above is intentional; if so, documenting the actual rule (e.g. "can't delete a
+  product with active orders") would let a future `BlockListItem.getAvailableActions()` be built
+  correctly instead of guessed at.
+
+### Reusable components confirmed or newly extracted
+
+- **`ShareModal` and `CmsHeader` genuinely reused, not just similar-looking.** My Lynk's share
+  button uses the exact same `data-micromodal-trigger="modalShare"` attribute as Dashboard's —
+  verified, not assumed. Same header structure (`#header`, notification badge) confirmed present
+  and unchanged.
+- **`BlockListItem`** (new) — the key pattern for this page: a component scoped to a single
+  caller-supplied `Locator` rather than the page as a whole, making all 58 (and future) block
+  instances usable through one definition instead of one-off locators per card.
+- **`AddNewBlockModal`** (new) — every block-type link, verified against the real HTML. This is
+  the direct entry point into the "My Lynk block-type pages" you'll send next.
+- **`PublishAndShowBlockModal`** (new) — batch publish/show management, real ids confirmed for
+  the select-all checkboxes; per-row interaction inside it not yet modeled (its block list loads
+  asynchronously and wasn't captured in a populated state in this HTML).
 
 ### ⚠️ Naming ambiguity discovered — needs a decision
 

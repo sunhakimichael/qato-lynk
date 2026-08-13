@@ -47,6 +47,14 @@ describe("Route Registry", () => {
     expect(cmsRoutes.ordersHome()).toBe("https://cms.fixture.test/admin/orders/home");
   });
 
+  it("composes an absolute add-image-block URL", () => {
+    expect(cmsRoutes.addImageBlock()).toBe("https://cms.fixture.test/admin/image?fk_page_id=home");
+  });
+
+  it("composes an absolute add-text-block URL", () => {
+    expect(cmsRoutes.addTextBlock()).toBe("https://cms.fixture.test/admin/text?fk_page_id=home");
+  });
+
   it("composes an absolute public storefront URL using the creator slug", () => {
     expect(publicRoutes.storefront()).toBe("https://public.fixture.test/fixture-creator");
   });

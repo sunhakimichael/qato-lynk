@@ -24,6 +24,10 @@ export const cmsRoutes = {
   myLynksHome: (): string => `${getBaseUrl("cms")}/admin/my-lynks/home`,
   /** Product Orders list. */
   ordersHome: (): string => `${getBaseUrl("cms")}/admin/orders/home`,
+  /** Add Image block form. Confirmed via AddNewBlockModal's real href. */
+  addImageBlock: (): string => `${getBaseUrl("cms")}/admin/image?fk_page_id=home`,
+  /** Add Text block form. Confirmed via AddNewBlockModal's real href. */
+  addTextBlock: (): string => `${getBaseUrl("cms")}/admin/text?fk_page_id=home`,
 };
 
 export const publicRoutes = {
