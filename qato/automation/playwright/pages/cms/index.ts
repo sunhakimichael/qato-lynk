@@ -4,5 +4,6 @@ export { CmsDashboardPage } from "./CmsDashboardPage";
 export { CmsMyLynkPage } from "./CmsMyLynkPage";
 export { CmsAddImageBlockPage } from "./CmsAddImageBlockPage";
 export { CmsAddTextBlockPage } from "./CmsAddTextBlockPage";
+export { CmsAddLinkBlockPage } from "./CmsAddLinkBlockPage";
 export { CmsHomePage } from "./CmsHomePage";
 export { CmsOrdersPage } from "./CmsOrdersPage";

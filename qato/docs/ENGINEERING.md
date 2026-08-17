@@ -497,8 +497,41 @@ tier it used and why, especially when it deviates from what codegen would have g
 | Home (Dashboard) | Built from scratch, 3 shared shell components extracted |
 | My Lynk | Built from scratch, 3 more reusable components extracted (58 real block instances verified) |
 | Add Image / Add Text blocks | Built from scratch, 1 shared component extracted (`BlockOptionsToggle`) |
-| Add Link / Add Video / Add Social Connect blocks | Not started — see note below |
+| Add Link block | Built from scratch — richest form so far, including a real anti-bot honeypot field |
+| Add Video / Add Social Connect blocks | Not started |
 | Vouchers, Settings (×7), Orders, Product, My Purchase, Affiliates, Statistics, remaining Monetization block types | Not yet started |
+
+## Add Link Block Page — Findings
+
+Unlike Image/Text, Link's form has 12 real fields, verified individually: title, url, a hidden
+thumbnail upload (`#pic`, same pattern as Image), a full scheduled-release sub-form (enable
+toggle + start/end date+time), block-layout radio buttons, and one field that isn't a real form
+field at all.
+
+### Application issues
+
+None beyond what was already flagged for Image/Text (the Cancel-destination inconsistency —
+Link's Cancel matches Text/Video's `/admin/my-lynks/home`, not Image's `/admin/my-lynks`,
+reinforcing that Image is the outlier).
+
+### Automation considerations
+
+- **A real anti-bot honeypot field was found and must never be interacted with.**
+  `input[name="company"]` has `style="display:none"` and `tabindex="-1"` — confirmed in the real
+  HTML, not a guess. This is a standard bot-detection technique: real users never see or touch it;
+  automation that blindly fills every input on a form could trigger it and get the submission
+  rejected as spam. It's included in the Locator Registry specifically so it's documented as a
+  do-not-touch element, not because any journey should use it.
+- **`#pic` (file upload) reuses the exact same id as the Image block's file input.** Confirmed via
+  the real HTML. Not a locator conflict (they're on different pages), but worth knowing if either
+  page's markup is ever compared or reused directly.
+- Link's form has real client-side validation (`required` on both `title` and `url`) — worth
+  keeping in mind if a future negative-path test (submitting without one of these) is written.
+
+### Recommended improvements
+
+None — this page's implementation looks internally consistent; the only inconsistency is the
+already-flagged Cancel-destination issue shared with Image.
 
 ## Add Image / Add Text Block Pages — Findings
 
