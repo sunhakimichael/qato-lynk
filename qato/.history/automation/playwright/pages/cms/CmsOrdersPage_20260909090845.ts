@@ -10,6 +10,7 @@ export class CmsOrdersPage {
   // }
 
     async goto(): Promise<void> {
+    // await this.page.goto(cmsRoutes.dashboard());
     const url = cmsRoutes.ordersHome();
 
     console.log(`Navigating to: ${url}`);

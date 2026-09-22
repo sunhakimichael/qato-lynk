@@ -5,13 +5,7 @@ export const duitkuSandboxLocators = {
   bankTransferOption: (page: Page) => page.getByText("Bank Transfer"),
 
   /** Parameterized by the exact channel label shown in the dropdown, e.g. "CIMB NIAGA VA". */
-  // paymentChannelOption: (page: Page, channelLabel: string) => page.getByText(channelLabel),
-
-  paymentChannelOption: (page: Page) =>
-  page.locator(
-    '#selectDropdown .channels[style*="display: block"] ' +
-    '.item[data-category="Bank Transfer"][data-value="VA"]'
-  ),
+  paymentChannelOption: (page: Page, channelLabel: string) => page.getByText(channelLabel),
 
   vaNumberInput: (page: Page) =>
     page.getByRole("textbox", { name: "Enter Virtual Account Number" }),

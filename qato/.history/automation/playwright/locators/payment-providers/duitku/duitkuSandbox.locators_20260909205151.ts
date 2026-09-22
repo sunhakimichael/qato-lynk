@@ -9,8 +9,7 @@ export const duitkuSandboxLocators = {
 
   paymentChannelOption: (page: Page) =>
   page.locator(
-    '#selectDropdown .channels[style*="display: block"] ' +
-    '.item[data-category="Bank Transfer"][data-value="VA"]'
+    '#selectDropdown .item[data-value="VA"][data-category="Bank Transfer"]'
   ),
 
   vaNumberInput: (page: Page) =>

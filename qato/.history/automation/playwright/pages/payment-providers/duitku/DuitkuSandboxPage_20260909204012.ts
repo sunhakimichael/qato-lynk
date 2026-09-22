@@ -27,7 +27,7 @@ export class DuitkuSandboxPage implements VirtualAccountPaymentProvider {
 
   // Bank Transfer sudah terlihat sebagai category
   await duitkuSandboxLocators
-    .paymentChannelOption(this.page)
+    .paymentChannelOption(this.page, this.channelLabel)
     .click();
   }
 

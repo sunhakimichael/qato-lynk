@@ -667,23 +667,48 @@ in mind when its turn comes.
   the select-all checkboxes; per-row interaction inside it not yet modeled (its block list loads
   asynchronously and wasn't captured in a populated state in this HTML).
 
-### ⚠️ Naming ambiguity discovered — needs a decision
+### ⚠️→✅ Naming ambiguity — caused a real test failure, now fixed at the journey level
 
-Processing the Home page surfaced a real naming collision that predates this work:
+Originally flagged as a "needs a decision, not urgent" item while processing Home. It turned out
+to be more than cosmetic: running `pnpm test:cms` surfaced a real failure — login succeeded, but
+the flow timed out around the post-login navigation. Investigation confirmed two real bugs on that
+one code path, both traced back to this naming collision:
 
-- The sidebar's **"Home"** link points to `/v2/admin/dashboard` — this is what a real user means by
-  "Home" in the CMS.
-- The **existing** `CmsHomePage` (built in Milestone 3, from codegen) actually models
-  `/admin/my-lynks/home` — the **My Lynk** section, not Home/Dashboard at all. It's used as the
-  post-login landing target in `loginAsCreator()`.
+1. **`loginAsCreator()` navigated to the wrong page.** It called `CmsHomePage.goto()`, which
+   resolves to `/admin/my-lynks/home` (My Lynk) — not `/v2/admin/dashboard` (the real Home,
+   confirmed via the sidebar's own "Home" link during the Home/Dashboard work).
+2. **`CmsHomePage.clickOrdersLink()` used a stale, already-known-broken locator.**
+   `getByRole('link', { name: 'Orders' })` — the exact same accessible-name bug found and fixed
+   for the sidebar during the My Lynk work (the real Orders link's accessible name includes a
+   trailing pending-count badge, e.g. `"Orders 3"`, not just `"Orders"`). `CmsHomePage`'s own copy
+   of this locator was never updated at the time, since it wasn't on the code path being touched.
 
-These are two genuinely different pages that happen to share a confusing name. Rather than
-silently rename or break existing, working code (`CmsHomePage` is used by `loginAsCreator` and
-`viewProductOrders`), a new `CmsDashboardPage` was built for the real Home/Dashboard page instead
-— they now coexist under distinguishable names. **Recommended follow-up** (not done yet, needs a
-decision): rename `CmsHomePage` → `CmsMyLynkPage` (and `cmsHomeLocators` → `cmsMyLynkLocators`)
-for clarity, updating the two journeys that reference it. Flagging this rather than doing it
-unprompted, since it touches existing working code.
+**Fix applied**, per explicit instruction to reuse existing assets and not create duplicates:
+
+- `loginAsCreator()` now navigates via `CmsDashboardPage` instead of `CmsHomePage`. Return type
+  changed from `CmsHomePage` to `CmsDashboardPage` accordingly.
+- `viewProductOrders()` now clicks Orders via the shared `CmsSidebarNav` component (already
+  correct, already verified) instead of `CmsHomePage.clickOrdersLink()`'s stale copy.
+- `fixtures/journeys.fixture.ts`'s `authenticatedCreatorHome` fixture type updated to match
+  (`CmsDashboardPage`). Fixture **key name** deliberately left unchanged — still descriptively
+  accurate, and renaming it wasn't necessary to fix the bug.
+
+**`CmsHomePage` itself was not touched** — it still exists, still models My Lynk under its
+original name, per the standing decision not to rename it without broader cause. It is simply no
+longer used by `loginAsCreator`/`viewProductOrders`. Its `clickOrdersLink()` method still carries
+the same stale locator — **known dead-weight risk**: if anything calls `CmsHomePage.clickOrdersLink()`
+directly in the future, it will hit the same bug. Not fixed here since nothing currently uses it,
+and fixing an unused method would be exactly the "refactor unrelated code" this investigation was
+told not to do. Grepped the full codebase to confirm `CmsHomePage` has no other callers beyond the
+two journeys above and the generic `pages.fixture.ts` DI entry (which just instantiates it,
+doesn't navigate, and is unaffected).
+
+**Verified:** typecheck clean, full unit suite passing (56 tests), and — since this sandbox can't
+launch a real browser — resolved `cmsRoutes.dashboard()` against the real staging config directly:
+confirmed it composes `https://stage.lynk.id/v2/admin/dashboard`, distinct from
+`cmsRoutes.myLynksHome()`'s `https://stage.lynk.id/admin/my-lynks/home`. This confirms the routing
+fix is structurally correct; it does not confirm the original reported timeout is resolved, since
+that requires an actual browser run this environment cannot perform.
 
 ### Shared shell components (new)
 

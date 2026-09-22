@@ -16,19 +16,10 @@ export class DuitkuSandboxPage implements VirtualAccountPaymentProvider {
     await this.page.goto(DUITKU_SANDBOX_DEMO_URL);
   }
 
-  // async selectChannel(): Promise<void> {
-  //   await duitkuSandboxLocators.displaySelect(this.page).click();
-  //   await duitkuSandboxLocators.bankTransferOption(this.page).click();
-  //   await duitkuSandboxLocators.paymentChannelOption(this.page, this.channelLabel).click();
-  // }
-
   async selectChannel(): Promise<void> {
-  await duitkuSandboxLocators.displaySelect(this.page).click();
-
-  // Bank Transfer sudah terlihat sebagai category
-  await duitkuSandboxLocators
-    .paymentChannelOption(this.page)
-    .click();
+    await duitkuSandboxLocators.displaySelect(this.page).click();
+    await duitkuSandboxLocators.bankTransferOption(this.page).click();
+    await duitkuSandboxLocators.paymentChannelOption(this.page, this.channelLabel).click();
   }
 
   async enterVaNumber(vaNumber: string): Promise<void> {

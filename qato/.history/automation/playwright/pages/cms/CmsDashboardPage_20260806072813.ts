@@ -19,18 +19,7 @@ export class CmsDashboardPage {
   constructor(private readonly page: Page) {}
 
   async goto(): Promise<void> {
-    // await this.page.goto(cmsRoutes.dashboard());
-    const url = cmsRoutes.dashboard();
-
-    console.log(`Navigating to: ${url}`);
-
-    const response = await this.page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000,
-    });
-
-    console.log(`Status: ${response?.status()}`);
-    console.log(`Final URL: ${this.page.url()}`);
+    await this.page.goto(cmsRoutes.dashboard());
   }
 
   // ---- Profile / MyLink card ----

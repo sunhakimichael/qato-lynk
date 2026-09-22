@@ -39,9 +39,7 @@ export const publicCheckoutLocators = {
    * matches what codegen itself recorded.
    */
   communicationConsentCheckbox: (page: Page) =>
-    // page.getByRole("checkbox", { name: /I agree that the creator may contact me by email or phone/i, }),
-    page.locator("#agree_detail"),
-
+    page.getByRole("checkbox", { name: "I agree that my email and" }),
 
   /**
    * "Buy Now - IDR" intentionally excludes the amount. Because role-name
