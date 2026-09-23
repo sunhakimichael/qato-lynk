@@ -202,7 +202,7 @@ have to guess:
 | Creator account | `CREATOR_SLUG` | Required, verified |
 | Product being purchased | `TEST_PRODUCT_NAME`, `TEST_PRODUCT_PRICE`, `TEST_PRODUCT_TYPE`, `TEST_PRODUCT_CURRENCY` | Required, verified |
 | Exact text of the product link on the storefront | `TEST_PRODUCT_LINK_LABEL` | Optional — verified for local/development/staging; unverified and left blank in production (see below) |
-| Payment method used for the Virtual Account test | `TEST_PAYMENT_METHOD_POSITION`, `TEST_PAYMENT_METHOD_CHANNEL_LABEL`, `TEST_PAYMENT_METHOD_DISPLAY_NAME` | Optional — verified for local/development/staging; intentionally blank in production, for a different reason (see below) |
+| Payment method used for the Virtual Account test | `TEST_PAYMENT_METHOD_CHANNEL_LABEL`, `TEST_PAYMENT_METHOD_DISPLAY_NAME` (checkout always selects CIMB Niaga VA by code) | Optional — verified for local/development/staging; intentionally blank in production, for a different reason (see below) |
 | Which environment/URLs are being tested | Which `.env.*` file you're editing, or `APP_ENV` | Required, verified |
 
 **Why production leaves two things blank, and why they're not the same kind of "blank":**
