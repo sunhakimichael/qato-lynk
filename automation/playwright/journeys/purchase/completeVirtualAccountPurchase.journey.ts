@@ -8,6 +8,7 @@ import { DuitkuSandboxPage } from "../../pages/payment-providers/duitku/DuitkuSa
 import type { VirtualAccountPaymentProvider } from "../../pages/payment-providers/VirtualAccountPaymentProvider";
 import { PaymentHelper } from "../../helpers/PaymentHelper";
 import { getTestMember, getTestProduct, getTestPaymentMethod } from "../../factories";
+import type { PurchaseRecord } from "./purchaseRecord";
 
 export interface VirtualAccountPurchaseOptions {
   /**
@@ -42,6 +43,8 @@ export interface VirtualAccountPurchaseOptions {
 export interface VirtualAccountPurchaseResult {
   paymentStatusPage: PublicPaymentStatusPage;
   thankYouPage: ThankYouPage;
+  /** What the buyer saw (item, amounts, TRX ID, email) — compare against the CMS with verifyOrderInCms(). */
+  purchase: PurchaseRecord;
 }
 
 /**
@@ -102,10 +105,12 @@ export async function completeVirtualAccountPurchase(
 
   const checkout = new PublicCheckoutPage(page);
   await checkout.waitForLoad();
-  await checkout.fillEmail(options.buyerEmail ?? getTestMember().email);
+  const customerEmail = options.buyerEmail ?? getTestMember().email;
+  await checkout.fillEmail(customerEmail);
   await checkout.openPaymentMethodSelector();
   await checkout.selectCimbNiagaVirtualAccount();
   await checkout.confirmPaymentMethod();
+  const orderSummary = await checkout.getOrderSummary();
   await checkout.acceptTermsOfUse();
   await checkout.acceptCommunicationConsent();
   await checkout.submitPurchase();
@@ -113,6 +118,11 @@ export async function completeVirtualAccountPurchase(
   const paymentStatusPage = new PublicPaymentStatusPage(page);
   await paymentStatusPage.waitForLoad();
   await options.onPaymentPageReady?.(paymentStatusPage);
+  const purchase: PurchaseRecord = {
+    ...orderSummary,
+    trxId: await paymentStatusPage.getInvoiceNumber(),
+    customerEmail,
+  };
 
   // The sandbox gets its own tab so the MyLink payment page stays open for
   // "Check Transaction" afterwards.
@@ -136,5 +146,5 @@ export async function completeVirtualAccountPurchase(
   const thankYouPage = new ThankYouPage(page);
   await thankYouPage.waitForLoad();
 
-  return { paymentStatusPage, thankYouPage };
+  return { paymentStatusPage, thankYouPage, purchase };
 }

@@ -62,3 +62,27 @@ describe("PaymentHelper.extractPaymentAmountFromText", () => {
     );
   });
 });
+
+describe("PaymentHelper.parseRupiah", () => {
+  it("parses the formats seen on checkout, payment page and CMS", () => {
+    expect(PaymentHelper.parseRupiah("Rp. 150,000")).toBe(150000);
+    expect(PaymentHelper.parseRupiah("Rp 153,000")).toBe(153000);
+    expect(PaymentHelper.parseRupiah("153.000")).toBe(153000);
+    expect(PaymentHelper.parseRupiah("150000")).toBe(150000);
+  });
+
+  it("throws on text that isn't an amount", () => {
+    expect(() => PaymentHelper.parseRupiah("- Rp. 0 off")).toThrow(/Not a rupiah amount/);
+  });
+});
+
+describe("PaymentHelper.extractInvoiceNumberFromText", () => {
+  it("extracts the Inv. Number from the real invoice section text", () => {
+    const text = "Inv. Number:\n02c150e89a3864fe53de8ae39aa916b6\n09:56\nTrx. Date:\n23-Sep-2026\n\nPayment Amount\n\n153.000";
+    expect(PaymentHelper.extractInvoiceNumberFromText(text)).toBe("02c150e89a3864fe53de8ae39aa916b6");
+  });
+
+  it("throws with the raw text when no invoice number is present", () => {
+    expect(() => PaymentHelper.extractInvoiceNumberFromText("Payment Amount 153.000")).toThrow(/Inv\. Number/);
+  });
+});

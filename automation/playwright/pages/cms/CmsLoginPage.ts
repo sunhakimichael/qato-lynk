@@ -1,12 +1,18 @@
 import type { Page } from "@playwright/test";
 import { cmsLoginLocators } from "../../locators/cms/loginPage.locators";
 import { cmsRoutes } from "../../config";
+import { gotoSlowPage, waitForPageReady } from "../../helpers/waitForPageReady";
 
 export class CmsLoginPage {
   constructor(private readonly page: Page) {}
 
+  /** The login page can be slow to load; waits (with one reload) for the username field. */
   async goto(): Promise<void> {
-    await this.page.goto(cmsRoutes.login());
+    await gotoSlowPage(this.page, cmsRoutes.login());
+    await waitForPageReady(this.page, cmsLoginLocators.usernameInput(this.page), {
+      pageName: "CMS login",
+      reloadOnTimeout: true,
+    });
   }
 
   async fillUsername(username: string): Promise<void> {

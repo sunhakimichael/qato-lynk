@@ -26,7 +26,9 @@ export async function viewProductOrders(
   const sidebar = new CmsSidebarNav(page);
   await sidebar.clickOrders();
 
+  // The sidebar click already navigates to Orders — wait for it rather than
+  // loading the (slow) page a second time with goto().
   const ordersPage = new CmsOrdersPage(page);
-  await ordersPage.goto();
+  await ordersPage.waitForLoad();
   return ordersPage;
 }

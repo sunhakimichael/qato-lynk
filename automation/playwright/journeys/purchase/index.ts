@@ -5,3 +5,5 @@ export type {
   VirtualAccountPurchaseOptions,
   VirtualAccountPurchaseResult,
 } from "./completeVirtualAccountPurchase.journey";
+export { expectedCmsTotal } from "./purchaseRecord";
+export type { PurchaseRecord } from "./purchaseRecord";

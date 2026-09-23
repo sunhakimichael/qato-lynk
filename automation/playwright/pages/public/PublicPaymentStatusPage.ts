@@ -2,6 +2,7 @@ import type { Page, Locator } from "@playwright/test";
 import { loadEnvConfig } from "@qato/shared";
 import { publicPaymentStatusLocators } from "../../locators/public/paymentStatusPage.locators";
 import { waitForPageReady } from "../../helpers/waitForPageReady";
+import { PaymentHelper } from "../../helpers/PaymentHelper";
 
 export class PublicPaymentStatusPage {
   constructor(private readonly page: Page) {}
@@ -73,6 +74,11 @@ export class PublicPaymentStatusPage {
    */
   async getInvoiceSectionText(): Promise<string> {
     return publicPaymentStatusLocators.invoiceSection(this.page).innerText();
+  }
+
+  /** The "Inv. Number" — the same id the CMS shows as "TRX ID". */
+  async getInvoiceNumber(): Promise<string> {
+    return PaymentHelper.extractInvoiceNumberFromText(await this.getInvoiceSectionText());
   }
 
   /**

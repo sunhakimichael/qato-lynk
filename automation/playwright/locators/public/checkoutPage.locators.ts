@@ -28,6 +28,18 @@ export const publicCheckoutLocators = {
   paymentMethodRadio: (page: Page, code: string) =>
     page.locator(`input[type="radio"][name="payment_method"][value="${code}"]`),
 
+  // ---- Order summary (verified against dev on 2026-09-23) ----
+  /** First product row's name in the checkout PRODUCT list. */
+  itemName: (page: Page) => page.locator("li:has(#prc) p.line-clamp-2").first(),
+  /** First product row's price, e.g. "150,000". */
+  itemPrice: (page: Page) => page.locator("#prc").first(),
+  /** Raw amounts in hidden inputs of the PAYMENT DETAIL box, e.g. value="150000". */
+  subtotalAmount: (page: Page) => page.locator("input[data-subtotalamount]"),
+  discountAmount: (page: Page) => page.locator("input[data-discountamount]"),
+  convenienceFeeAmount: (page: Page) => page.locator("input[data-feeamount]"),
+  /** Displayed TOTAL, e.g. "Rp 153,000". Updates once the payment method's fee is known. */
+  grandTotal: (page: Page) => page.locator("[data-grandtotal]"),
+
   confirmMethodButton: (page: Page) => page.getByRole("button", { name: "Confirm Method" }),
 
   /**

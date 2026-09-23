@@ -76,6 +76,31 @@ export class PaymentHelper {
   }
 
   /**
+   * Parses a displayed rupiah amount ("Rp. 150,000", "Rp 150,000",
+   * "153.000") into a whole number. Throws on anything that isn't a plain
+   * amount once currency symbols and separators are stripped.
+   */
+  static parseRupiah(raw: string): number {
+    const digits = PaymentHelper.normalizeCurrency(raw);
+    if (!/^\d+$/.test(digits)) {
+      throw new Error(`Not a rupiah amount: "${raw}"`);
+    }
+    return Number(digits);
+  }
+
+  /**
+   * Extracts the "Inv. Number" (a 32-char hex id, shown as "TRX ID" in the
+   * CMS) from the payment page's invoice section text.
+   */
+  static extractInvoiceNumberFromText(invoiceSectionText: string): string {
+    const invoiceNumber = invoiceSectionText.match(/Inv\.?\s*Number\s*:?\s*([0-9a-f]{16,})/i)?.[1];
+    if (!invoiceNumber) {
+      throw new Error(`Could not extract Inv. Number from the invoice section. Raw text was: "${invoiceSectionText}"`);
+    }
+    return invoiceNumber;
+  }
+
+  /**
    * Normalizes the MyLink-sourced amount and pays via the configured
    * provider. The provider itself is responsible for verifying the
    * amount it actually entered matches what it was given — see

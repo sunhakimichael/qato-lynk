@@ -4,7 +4,14 @@ import { waitForPageReady } from "../../helpers/waitForPageReady";
 import { loadEnvConfig } from "@qato/shared";
 import { parseRetryAfterMs } from "../../helpers/retryAfter";
 import { CheckoutRateLimitedError } from "./CheckoutRateLimitedError";
+import { PaymentHelper } from "../../helpers/PaymentHelper";
+import type { PurchaseRecord } from "../../journeys/purchase/purchaseRecord";
 
+/** Checkout amounts and item, as the buyer saw them before paying. */
+export type CheckoutOrderSummary = Omit<PurchaseRecord, "trxId" | "customerEmail">;
+
+/** Recalculates the convenience fee once a payment method is chosen. */
+const CONVENIENCE_FEE_URL = /\/payments\/calc-con-fee/;
 /** The request that creates the VA at Duitku once "Buy Now" is clicked. */
 const PAYMENT_INQUIRY_URL = /\/payments\/integrations\/duitku\/inquiry/;
 const PAYMENT_PAGE_URL = /\/checkout\/payme/;
@@ -12,6 +19,9 @@ const PAYMENT_PAGE_URL = /\/checkout\/payme/;
 const MAX_SUBMIT_ATTEMPTS = 2;
 
 export class PublicCheckoutPage {
+  /** Settles once the fee for the chosen payment method has been calculated (or timed out). */
+  private feeCalculated: Promise<unknown> = Promise.resolve();
+
   constructor(private readonly page: Page) {}
 
   /**
@@ -45,6 +55,9 @@ export class PublicCheckoutPage {
     const code = PAYMENT_METHOD_CODES.CIMB_NIAGA_VA;
     const option = publicCheckoutLocators.paymentMethodOption(this.page, code);
     await waitForPageReady(this.page, option, { pageName: "Checkout payment method list" });
+    this.feeCalculated = this.page
+      .waitForResponse((res) => CONVENIENCE_FEE_URL.test(res.url()), { timeout: loadEnvConfig().DEFAULT_ACTION_TIMEOUT_MS })
+      .catch(() => undefined);
     await option.click();
     await expect(
       publicCheckoutLocators.paymentMethodRadio(this.page, code),
@@ -54,6 +67,39 @@ export class PublicCheckoutPage {
 
   async confirmPaymentMethod(): Promise<void> {
     await publicCheckoutLocators.confirmMethodButton(this.page).click();
+  }
+
+  /**
+   * Reads the item and PAYMENT DETAIL amounts. Call after the payment
+   * method is confirmed: the convenience fee (and so TOTAL) only settles
+   * once the fee for that method has been calculated, so this waits for
+   * that request and then for TOTAL to equal subtotal - discount + fee.
+   */
+  async getOrderSummary(): Promise<CheckoutOrderSummary> {
+    await this.feeCalculated;
+
+    const read = async (): Promise<CheckoutOrderSummary> => ({
+      itemName: (await publicCheckoutLocators.itemName(this.page).innerText()).trim(),
+      itemPrice: PaymentHelper.parseRupiah(await publicCheckoutLocators.itemPrice(this.page).innerText()),
+      subtotal: PaymentHelper.parseRupiah(await publicCheckoutLocators.subtotalAmount(this.page).inputValue()),
+      discount: PaymentHelper.parseRupiah(await publicCheckoutLocators.discountAmount(this.page).inputValue()),
+      convenienceFee: PaymentHelper.parseRupiah(
+        await publicCheckoutLocators.convenienceFeeAmount(this.page).inputValue(),
+      ),
+      grandTotal: PaymentHelper.parseRupiah(await publicCheckoutLocators.grandTotal(this.page).innerText()),
+    });
+
+    let summary = await read();
+    await expect
+      .poll(
+        async () => {
+          summary = await read();
+          return summary.grandTotal - (summary.subtotal - summary.discount + summary.convenienceFee);
+        },
+        { message: "Checkout TOTAL should equal subtotal - discount + convenience fee" },
+      )
+      .toBe(0);
+    return summary;
   }
 
   async acceptTermsOfUse(): Promise<void> {

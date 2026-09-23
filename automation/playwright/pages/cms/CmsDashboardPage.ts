@@ -1,6 +1,9 @@
 import type { Page, Locator } from "@playwright/test";
 import { cmsDashboardLocators } from "../../locators/cms/dashboardPage.locators";
 import { cmsRoutes } from "../../config";
+import { loadEnvConfig } from "@qato/shared";
+import { waitForPageReady } from "../../helpers/waitForPageReady";
+import { cmsSidebarNavLocators } from "../../locators/components/cmsSidebarNav.locators";
 
 /**
  * The CMS "Home" page — distinct from `CmsHomePage` (which actually
@@ -26,7 +29,11 @@ export class CmsDashboardPage {
 
     const response = await this.page.goto(url, {
       waitUntil: "domcontentloaded",
-      timeout: 30000,
+      timeout: loadEnvConfig().PAGE_LOAD_TIMEOUT_MS,
+    });
+    await waitForPageReady(this.page, cmsSidebarNavLocators.ordersLink(this.page), {
+      pageName: "CMS dashboard",
+      reloadOnTimeout: true,
     });
 
     console.log(`Status: ${response?.status()}`);
